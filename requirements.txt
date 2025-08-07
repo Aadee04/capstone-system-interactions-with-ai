@@ -1,0 +1,39 @@
+# Template generated for all possible requirements
+
+# --- Core LangChain and LLMs ---
+langchain>=0.1.17
+openai>=1.30.1               # or other LLM providers (e.g. cohere, anthropic)
+tiktoken                     # Token counting for OpenAI models
+
+# --- Vector Store Support (if using for memory or RAG) ---
+faiss-cpu                    # or chromadb, weaviate-client, etc.
+
+# --- Document and File Support ---
+unstructured                 # Handles PDFs, DOCX, PPTX, etc.
+pdfplumber                   # More control over PDFs
+python-docx                  # Word document reader
+pypdf                        # Lightweight PDF parser
+beautifulsoup4               # For HTML parsing
+lxml                         # XML support (used by BS4)
+
+# --- Audio Input/Output (Voice Assistant Mode) ---
+SpeechRecognition
+pyttsx3                      # Text-to-speech
+pyaudio                      # For microphone access (may require portaudio)
+gtts                         # Optional: Google TTS
+
+# --- GUI (optional, pick one) ---
+# If you're using a GUI like PyQt or Tkinter (Tkinter is built-in)
+PyQt5                        # If using PyQt GUI
+# or
+# tkinter                    # Commented out since it's built-in
+
+# --- Tooling + Helpers ---
+python-dotenv                # For .env files / API keys
+requests                     # For API calls / web tools
+bs4                          # Web scraping (optional)
+validators                   # URL validation
+numpy                        # Needed by some toolkits
+
+# --- Optional: App Packaging ---
+pyinstaller                  # For building a desktop executable
