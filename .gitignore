@@ -1,6 +1,83 @@
-# gitignore template for LangChain products, e.g., LangGraph, LangSmith
-# website: https://www.langchain.com/
-# website: https://www.langchain.com/langgraph
+# Template for all possible files that have to be ignored
 
-# LangGraph
-.langgraph_api/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and debug
+*.log
+*.out
+*.err
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+.env/
+.venv/
+venv/
+ENV/
+env/
+*.env
+
+# LangChain cache (if using)
+.cache/
+langchain.db
+
+# API keys or secrets
+.env
+*.env.local
+secrets.json
+
+# Python notebooks
+.ipynb_checkpoints/
+
+# VSCode / IDE files
+.vscode/
+.idea/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Audio or output files
+*.wav
+*.mp3
+*.mp4
+*.ogg
+*.flac
+
+# Data
+*.sqlite3
+*.db
+*.csv
+*.pdf
+*.docx
+*.xlsx
+
+# Jupyter/experiment outputs
+*.ipynb
+outputs/
+
+# Node.js deps (if using Electron frontend)
+node_modules/
+package-lock.json
+
+# PyInstaller / Executables
+*.exe
+*.app
+*.deb
+*.dmg
+*.so
+*.dll
+
+# Mac/Linux desktop entries
+*.desktop
+
+# Models or LLM weights (if any local)
+models/
+*.bin
