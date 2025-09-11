@@ -1,0 +1,67 @@
+FOR DEVELOPER USE ONLY
+
+desktop_assistant/
+│
+├── requirements.txt          # All dependencies
+├── README.md                 # Project docs
+├── .gitignore                # Ignore venv, models, cache, logs
+├── run.py                    # Main entry point
+│
+├── app/                      # High-level orchestration
+│   ├── __init__.py
+│   ├── core.py                # Orchestrator loop (LangGraph/LangChain pipeline)
+│   ├── pipeline.py            # Wake word → STT → LLM → TTS
+│   ├── command_handler.py     # Direct system commands execution
+│   └── verifier.py            # Post-execution verification logic
+│
+├── config/                   # Configuration files
+│   ├── __init__.py
+│   ├── config.yaml            # Main config (paths, model names, thresholds)
+│   ├── defaults.yaml          # Default settings
+│   └── secrets.env            # API keys (if needed, but mostly local)
+│
+├── gui/                      # Desktop interface (Tauri/Electron optional)
+│   ├── __init__.py
+│   ├── main_window.py
+│   └── assets/                # Icons, images, etc.
+│
+├── resources/                # Models, data, and external files
+│   ├── wakewords/             # .ppn or Precise models
+│   ├── stt_models/            # Whisper.cpp models
+│   ├── tts_models/            # Coqui, pyttsx, etc.
+│   ├── llm_models/            # LLaMA/Ollama/finetuned adapters
+│   ├── rag_store/             # Vector DB (Chroma/FAISS for retrieval)
+│   └── prompts/               # LangChain templates + prompt libs
+│
+├── modules/                  # Independent AI modules
+│   ├── wakeword/
+│   │   ├── porcupine_handler.py
+│   │   ├── precise_handler.py
+│   │   └── snowboy_handler.py
+│   ├── stt/
+│   │   ├── whisper_handler.py
+│   │   └── vosk_handler.py
+│   ├── llm/
+│   │   ├── ollama_handler.py
+│   │   ├── llama_cpp_handler.py
+│   │   └── langchain_agent.py   # LangChain/LangGraph agent definitions
+│   ├── rag/
+│   │   ├── vectorstore_handler.py  # FAISS/Chroma
+│   │   └── retriever.py
+│   └── tts/
+│       ├── pyttsx_handler.py
+│       └── coqui_handler.py
+│
+├── utils/                    # Shared utilities
+│   ├── __init__.py
+│   ├── audio_utils.py
+│   ├── logger.py
+│   ├── config_loader.py
+│   └── file_utils.py
+│
+└── tests/                    # Automated tests
+    ├── test_wakeword.py
+    ├── test_stt.py
+    ├── test_llm.py
+    ├── test_rag.py
+    └── test_tts.py
