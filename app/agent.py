@@ -41,11 +41,14 @@ def desktop_agent(state:AgentState)->AgentState:
     system_prompt = SystemMessage(content=f"""
 You are a Desktop Assistant. Available tools: {tool_list_str}.
 
-Follow these rules strictly:
-1. If the user request matches exactly one of the tools above → call it.
-2. If no tool matches → generate minimal valid Python code and call the tool `run_python` with the code.
-3. Never substitute with a different tool.
-4. Do not answer in plain text unless explicitly asked.
+Rules:
+1. If the user request matches a tool → call it only once.
+2. Once a tool returns a valid result, consider the subtask completed.
+3. For casual conversation (greetings, chit-chat, small talk, questions unrelated to tools) → call talk_to_user only.
+4. If no tool matches → generate minimal Python code and call run_python.
+5. Never repeat a tool call for the same user input.
+6. Respond with plain text only if explicitly asked.
+7. Return a valid summary of any tool's valid output.
 """)
     response = model.invoke([system_prompt]+state['messages'])
     return {"messages": state["messages"] + [response]}
@@ -55,10 +58,23 @@ Follow these rules strictly:
 def should_continue(state: AgentState): 
     messages = state["messages"]
     last_message = messages[-1]
-    if not last_message.tool_calls: 
-        return "exit"
-    else:
+    
+    # Track completed tools in state
+    completed = state.get("completed_tools", [])
+
+    # Check tool calls in last message
+    tool_calls = getattr(last_message, "tool_calls", []) or []
+    pending = [t for t in tool_calls if getattr(t, "name", None) not in completed]
+
+    if pending:
+        # mark tools as completed
+        for t in pending:
+            completed.append(getattr(t, "name", None))
+        state["completed_tools"] = completed
         return "execute"
+    else:
+        return "exit"
+
 
 
 # TESTING CODE TO SAVE GENERATED TOOLS
@@ -94,20 +110,36 @@ app = graph.compile()
 def print_stream(stream):
     for s in stream:
         message = s["messages"][-1]
-        if isinstance(message, tuple):
-            print(message)
+        
+        # If the message is a dict with 'functs' key (LangGraph tool call JSON)
+        if isinstance(message, dict) and "functs" in message:
+            for call in message["functs"]:
+                tool_name = call.get("name")
+                args = call.get("arguments", {})
+
+                # Find the actual tool function
+                tool_func = next((t for t in tools if t.name == tool_name), None)
+                if tool_func:
+                    result = tool_func(**args)
+                    print(f"[Tool: {tool_name}] Output: {result}")
         else:
-            message.pretty_print()
+            # Normal message
+            if hasattr(message, "pretty_print"):
+                message.pretty_print()
+            else:
+                print(message)
+
+
 
 # Main loop
 while True:
     user_input = input("\nEnter your request (or type 'exit' to quit): ")
     if user_input.lower() in ["exit", "quit", "q"]:
-        print("👋 Exiting Desktop Assistant.")
+        print("Exiting Desktop Assistant.")
         break
 
     # Wrap into the expected format
-    inputs = {"messages": [HumanMessage(content=user_input)]}
+    inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
     
     # Stream and print the agent’s response
     print_stream(app.stream(inputs, stream_mode="values"))
