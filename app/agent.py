@@ -199,7 +199,6 @@ def planner_decision(state: AgentState) -> str:
 
 # --- ROUTER AGENT ---
 router_model = ChatOllama(model="freakycoder123/phi4-fc")
-
 def router_node(state: AgentState) -> AgentState:
     last_user_msg = state["messages"][-1].content
     text = last_user_msg.lower()
@@ -235,7 +234,6 @@ def router_node(state: AgentState) -> AgentState:
         "route": route
         }
 
-
 # Router decision function for switching to chat or tool use
 def router_decision(state: AgentState) -> str:
     return state.get("route", "chat")
@@ -252,6 +250,50 @@ def generate_tool_node(code: str, tool_name: str):
     
 
 # ---------- Build the Agent App / Graph --------------
+
+# Helper function to check if more tool calls are needed
+def should_continue(state: AgentState, agent_type="tools"):
+    last_message = state["messages"][-1]
+    completed = state.get("completed_tools", [])
+    tool_calls = getattr(last_message, "tool_calls", []) or []
+
+    # Tools agent → missing tool → handoff to coder
+    if agent_type == "tools":
+        unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools]]
+        if unavailable_tools:
+            return "coder_agent"
+
+    # Pending tool calls → send to executor
+    pending = [t for t in tool_calls if t.get("name") not in completed]
+    if pending:
+        return "execute"
+
+    # No pending, no unavailable → go verify
+    return "verifier_agent"
+
+# Helper function to execute tool and track completed tools
+def execute_tool_with_tracking(state: AgentState) -> AgentState:
+    tool_node = ToolNode(tools=tools)
+    new_state = tool_node(state)
+
+    last_msg = new_state["messages"][-1]
+    tool_calls = getattr(last_msg, "tool_calls", []) or []
+    if not tool_calls:
+        # No tools were called → send straight to verifier
+        return new_state  
+
+    for tc in tool_calls:
+        tool_name = tc.get("name")
+        if tool_name:
+            completed = new_state.get("completed_tools", [])
+            if tool_name not in completed:
+                completed.append(tool_name)
+            new_state["completed_tools"] = completed
+
+    return new_state
+
+
+# Build the state graph
 graph = StateGraph(AgentState)
 
 # Nodes
@@ -325,48 +367,6 @@ graph.add_conditional_edges(
 
 graph.add_edge("chat_agent", END)
 app = graph.compile()
-
-# Helper function to check if more tool calls are needed
-def should_continue(state: AgentState, agent_type="tools"): 
-    messages = state["messages"]
-    last_message = messages[-1]
-    
-    completed = state.get("completed_tools", [])
-    tool_calls = getattr(last_message, "tool_calls", []) or []
-
-    # Tools agent → missing tool → handoff to coder
-    if agent_type == "tools":
-        unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools]]
-        if unavailable_tools:
-            return "coder_agent"  # must match edge mapping
-
-    # Pending tool calls
-    pending = [t for t in tool_calls if getattr(t, "name", None) not in completed]
-    if pending:
-        for t in pending:
-            completed.append(getattr(t, "name", None))
-        state["completed_tools"] = completed
-        return "execute"  # must match edge mapping
-
-    # No pending, no unavailable → exit
-    return "exit"  # must match edge mapping
-
-# Helper function to execute tool and track completed tools
-def execute_tool_with_tracking(state: AgentState) -> AgentState:
-    tool_node = ToolNode(tools=tools)
-    new_state = tool_node(state)  # actually run the tool
-
-    # Track completed tool(s)
-    last_msg = new_state["messages"][-1]
-    for tc in getattr(last_msg, "tool_calls", []) or []:
-        tool_name = tc.get("name")
-        if tool_name:
-            completed = new_state.get("completed_tools", [])
-            if tool_name not in completed:
-                completed.append(tool_name)
-            new_state["completed_tools"] = completed
-
-    return new_state
 
 
 # --- Run the Agent ----------------------------------------------------------
