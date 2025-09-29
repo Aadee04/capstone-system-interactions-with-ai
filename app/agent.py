@@ -120,82 +120,6 @@ Options for the user:
 
 # -------------------------------------- All the Agents ---------------------------------------
 
-# --- CHAT AGENT ---
-chat_model = ChatOllama(model="freakycoder123/phi4-fc")
-def chat_agent(state: AgentState) -> AgentState:
-    system_prompt = SystemMessage(
-        content=(chatter_system_prompt))
-    response = chat_model.invoke([system_prompt] + state["messages"])
-    return {"messages": state["messages"] + [response]}
-
-
-# --- TOOL AGENT ---
-tool_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if not t.name=="run_python"])
-def tool_agent(state: AgentState) -> AgentState:
-    system_prompt = SystemMessage(content=tooler_system_prompt)
-    response = tool_model.invoke([system_prompt] + state["messages"])
-    return {"messages": state["messages"] + [response]}
-
-
-# --- CODER AGENT ---
-coder_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if t.name=="run_python"])
-def coder_agent(state: AgentState) -> AgentState:
-    system_prompt = SystemMessage(content=coder_system_prompt)
-    response = coder_model.invoke([system_prompt] + state["messages"])
-    return {"messages": state["messages"] + [response]}
-
-
-# --- VERIFIER AGENT ---
-verifier_model = ChatOllama(model="freakycoder123/phi4-fc")
-def verifier_agent(state: AgentState) -> AgentState:
-    system_prompt = SystemMessage(content=verifier_system_prompt)
-    response = verifier_model.invoke([system_prompt] + state["messages"])
-    decision = response.content.strip().lower()
-    # Save decision in state for routing
-    state["verifier_decision"] = decision
-    return {
-        "messages": state["messages"] + [response], 
-        "completed_tools": state.get("completed_tools", [])}
-
-
-# --- PLANNER AGENT ---
-planner_model = ChatOllama(model="freakycoder123/phi4-fc")
-def planner_agent(state: AgentState) -> AgentState:
-    system_prompt = SystemMessage(content=planner_system_prompt)
-    response = planner_model.invoke([system_prompt] + state["messages"])
-    
-    # Try to parse the LLM response as JSON
-    try:
-        parsed = json.loads(response.content)
-    except Exception:
-        parsed = {"subtask": "done"}  # fallback
-    
-    print(f"[Planner parsed]: {parsed}")  # DEBUGGING ---------------
-    # Attach parsed info as attributes for routing
-    response.agent = parsed.get("agent")
-    response.subtask = parsed.get("subtask")
-    response.tool_name = parsed.get("tool_name")
-
-    return {
-        "messages": state["messages"] + [response],
-        "completed_tools": state.get("completed_tools", [])
-    }
-
-# Planner decision function for switching between pre-built tools or coder
-def planner_decision(state: AgentState) -> str:
-    last_msg = state["messages"][-1]
-    agent_type = getattr(last_msg, "agent", None)
-    
-    if getattr(last_msg, "subtask", None) == "done":
-        return END  # all subtasks complete
-    elif agent_type == "tool":
-        return "tool_agent"
-    elif agent_type == "code":
-        return "coder_agent"
-    else:
-        # fallback
-        return "tool_agent"
-
 
 # --- ROUTER AGENT ---
 router_model = ChatOllama(model="freakycoder123/phi4-fc")
@@ -237,6 +161,108 @@ def router_node(state: AgentState) -> AgentState:
 # Router decision function for switching to chat or tool use
 def router_decision(state: AgentState) -> str:
     return state.get("route", "chat")
+
+
+# --- PLANNER AGENT ---
+planner_model = ChatOllama(model="freakycoder123/phi4-fc")
+def planner_agent(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage(content=planner_system_prompt)
+    response = planner_model.invoke([system_prompt] + state["messages"])
+    
+    # Try to parse the LLM response as JSON
+    try:
+        parsed = json.loads(response.content)
+    except Exception:
+        parsed = {"subtask": "done"}  # fallback
+    
+    print(f"[Planner parsed]: {parsed}")  # DEBUGGING ---------------
+    # Attach parsed info as attributes for routing
+    response.agent = parsed.get("agent")
+    response.subtask = parsed.get("subtask")
+    response.tool_name = parsed.get("tool_name")
+
+    return {
+        "messages": state["messages"] + [response],
+        "completed_tools": state.get("completed_tools", [])
+    }
+
+# Planner decision function for switching between pre-built tools or coder
+def planner_decision(state: AgentState) -> str:
+    last_msg = state["messages"][-1]
+    agent_type = getattr(last_msg, "agent", None)
+    
+    if getattr(last_msg, "subtask", None) == "done":
+        return END  # all subtasks complete
+    elif agent_type == "tool":
+        return "tool_agent"
+    elif agent_type == "code":
+        return "coder_agent"
+    else:
+        # fallback
+        return "tool_agent"
+
+
+# --- CHAT AGENT ---
+chat_model = ChatOllama(model="freakycoder123/phi4-fc")
+def chat_agent(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage(
+        content=(chatter_system_prompt))
+    response = chat_model.invoke([system_prompt] + state["messages"])
+    return {"messages": state["messages"] + [response]}
+
+
+# --- TOOL AGENT ---
+tool_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if not t.name=="run_python"])
+def tool_agent(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage(content=tooler_system_prompt)
+    response = tool_model.invoke([system_prompt] + state["messages"])
+    return {"messages": state["messages"] + [response]}
+
+
+# --- CODER AGENT ---
+coder_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if t.name=="run_python"])
+def coder_agent(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage(content=coder_system_prompt)
+    response = coder_model.invoke([system_prompt] + state["messages"])
+    return {"messages": state["messages"] + [response]}
+
+
+# --- VERIFIER AGENT ---
+verifier_model = ChatOllama(model="freakycoder123/phi4-fc")
+def verifier_agent(state: AgentState) -> AgentState:
+    VALID_DECISIONS = {"success", "retry_tool", "fallback_coder", "user_verifier", "failure"}
+
+    system_prompt = SystemMessage(content=verifier_system_prompt)
+    response = verifier_model.invoke([system_prompt] + state["messages"])
+    decision = response.content.strip().lower()
+
+    if decision not in VALID_DECISIONS:
+        # Default safety net
+        decision = "user_verifier"
+
+    return {
+        "messages": state["messages"] + [response],
+        "completed_tools": state.get("completed_tools", []),
+        "verifier_decision": decision,
+    }
+
+
+# --- USER VERIFIER AGENT ---
+def user_verifier(state: AgentState) -> AgentState:
+    # Ask user directly
+    user_msg = HumanMessage(content="Does the last step result look correct? (yes / no / abort)")
+    # Save for trace
+    state["messages"] = state["messages"] + [user_msg]
+
+    # Here you’d hook into actual user input (e.g., CLI, web UI, chat frontend)
+    user_reply = input("User Verifier: yes / no / abort → ").strip().lower()
+
+    if user_reply not in {"yes", "no", "abort"}:
+        user_reply = "abort"  # safety default
+
+    state["user_verifier_decision"] = user_reply
+    return state
+
 
 # -----------------------------------------------------------------------------------------
 
@@ -304,6 +330,7 @@ graph.add_node("tool_agent", tool_agent)
 graph.add_node("coder_agent", coder_agent)
 graph.add_node("execute_tool", execute_tool_with_tracking)
 graph.add_node("verifier_agent", verifier_agent)
+graph.add_node("user_verifier", user_verifier)
 
 # Entry point
 graph.set_entry_point("router")
@@ -356,12 +383,23 @@ graph.add_edge("execute_tool", "verifier_agent")
 # Verifier decides next step
 graph.add_conditional_edges(
     "verifier_agent",
-    lambda state: state.get("verifier_decision", "success"),
+    lambda state: state.get("verifier_decision", "user_verifier"),
     {
-        "success": "planner_agent",        # go back for next subtask
-        "retry_tool": "execute_tool",      # redo same tool
-        "fallback_coder": "coder_agent",   # escalate to coder
-        "exit": END
+        "success": "planner_agent",
+        "retry_tool": "execute_tool",
+        "fallback_coder": "coder_agent",
+        "user_verifier": "user_verifier",
+        "failure": END,
+    }
+)
+
+graph.add_conditional_edges(
+    "user_verifier",
+    lambda state: state.get("user_verifier_decision", "abort"),
+    {
+        "yes": "planner_agent",    # continue to next step
+        "no": "execute_tool",      # retry tool execution
+        "abort": END               # stop the graph
     }
 )
 
