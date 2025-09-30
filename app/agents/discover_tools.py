@@ -1,0 +1,19 @@
+import os, importlib, inspect
+
+# --- Dynamically discover tools in app/tools during each run ---
+def discover_tools():
+    tools = []
+    for file in os.listdir("app/tools"):
+        if file.endswith(".py") and file not in ["__init__.py"]:
+            name = file[:-3]
+            module = importlib.import_module(f"tools.{name}")
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+
+                # Pick only callables that have `name` and `description` attributes
+                if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
+                    tools.append(attr)
+    
+    print(f"Discovered {len(tools)} tools: {[tool.name for tool in tools]}\n")
+
+    return tools

@@ -1,47 +1,26 @@
-import textwrap
 from typing import Annotated, Sequence, TypedDict
-from langchain_core.messages import BaseMessage
-from langchain_core.messages import ToolMessage
-from langchain_core.messages import HumanMessage
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-import os, importlib, inspect
 import json
-from prompts.system_prompts import planner_system_prompt, chatter_system_prompt, coder_system_prompt
-from prompts.system_prompts import verifier_system_prompt, router_system_prompt, get_tooler_system_prompt
+from prompts.system_prompts import verifier_system_prompt, chatter_system_prompt, coder_system_prompt
+from prompts.system_prompts import router_system_prompt, get_tooler_system_prompt, get_planner_system_prompt
+from agents.discover_tools import discover_tools
 
-# -------------------------------------- Setup ---------------------------------------
-# --- Dynamically discover tools in app/tools during each run ---
-def discover_tools():
-    tools = []
-    for file in os.listdir("app/tools"):
-        if file.endswith(".py") and file not in ["__init__.py"]:
-            name = file[:-3]
-            module = importlib.import_module(f"tools.{name}")
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-
-                # Pick only callables that have `name` and `description` attributes
-                if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
-                    tools.append(attr)
-    return tools
-
+# -------------------------------------- Initial Setup ---------------------------------------
 tools = discover_tools()
-
 tool_list_str = ", ".join([t.name for t in tools])
-tooler_system_prompt = get_tooler_system_prompt(tool_list_str)
 
-
-# --- Define the Agent ---
+# -------------------------------- Define the Agent State (Memory) ----------------------------
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     completed_tools: list
     route: str
     verifier_decision: str  
     user_verifier_decision: str 
+    last_executor: str
 
 # -------------------------------------- All the Agents ---------------------------------------
 
@@ -67,7 +46,7 @@ def router_node(state: AgentState) -> AgentState:
             HumanMessage(content=last_user_msg)
         ])
         decision = resp.content.strip().lower()
-        print(f"[Router decision (LLM)]: {decision}") # DEBUGGING ---------------
+        # print(f"[Router decision (LLM)]: {decision}") # DEBUGGING ---------------
         if "tools" in decision:
             route = "planner"
         elif "planner" in decision:
@@ -81,9 +60,8 @@ def router_node(state: AgentState) -> AgentState:
 
     return {"route": route}
 
-# Router decision function for switching to chat or tool use
+# Router decision function for switching to chat or tool use------------------------------------------
 def router_decision(state: AgentState) -> str:
-    print("[Router Edge Chosen]", state.get("route") if state.get("route") != None else None)  # DEBUGGING ---------------
     return state.get("route", "chat").strip().lower()
 
 
@@ -91,12 +69,14 @@ def router_decision(state: AgentState) -> str:
 planner_model = ChatOllama(model="freakycoder123/phi4-fc")
 def planner_agent(state: AgentState) -> AgentState:
     print("[Planner Agent Invoked]")  # DEBUGGING ---------------
-    system_prompt = SystemMessage(content=planner_system_prompt)
+    system_prompt = SystemMessage(content=get_planner_system_prompt())
     response = planner_model.invoke([system_prompt] + state["messages"])
     
+    print(f"[Planner] Raw response: {response.content}")  # DEBUGGING ---------------
     # Try to parse the LLM response as JSON
     try:
         parsed = json.loads(response.content)
+        print(f"[Planner] Parsed JSON: {parsed}")  # DEBUGGING ---------------
     except Exception:
         parsed = {"subtask": "done"}  # fallback
     
@@ -113,7 +93,6 @@ def planner_agent(state: AgentState) -> AgentState:
 
 # Planner decision function for switching between pre-built tools or coder
 def planner_decision(state: AgentState) -> str:
-    print("[Planner decision check]")  # DEBUGGING ---------------
     last_msg = state["messages"][-1]
     agent_type = getattr(last_msg, "agent", None)
 
@@ -143,71 +122,212 @@ def chat_agent(state: AgentState) -> AgentState:
 # --- TOOL AGENT ---
 tool_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if not t.name=="run_python"])
 def tool_agent(state: AgentState) -> AgentState:
-    print("[Tool Agent Invoked]")  # DEBUGGING ---------------
-    system_prompt = SystemMessage(content=tooler_system_prompt)
+    print("[Tool Agent Invoked]")
+    system_prompt = SystemMessage(content=get_tooler_system_prompt(tool_list_str))
     response = tool_model.invoke([system_prompt] + state["messages"])
-    return {"messages": state["messages"] + [response]}
+    
+    print(f"[Tool Agent] Raw response content: {response.content}")
+    print(f"[Tool Agent] Has tool_calls attr: {hasattr(response, 'tool_calls')}")
+    
+    # FIX: Parse ANY JSON format from content and convert to tool_calls
+    tool_calls = getattr(response, "tool_calls", None)
+    if not tool_calls or len(tool_calls) == 0:
+        try:
+            content = response.content.strip()
+            # Remove markdown code blocks if present
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            
+            # Try to parse as JSON
+            parsed = None
+            if content.startswith("["):
+                # Direct list format: [{"name": "tool", "arguments": {...}}]
+                parsed = json.loads(content)
+            elif content.startswith("{"):
+                # Could be {"functools": [...]} or direct object
+                parsed_obj = json.loads(content)
+                if "functools" in parsed_obj:
+                    parsed = parsed_obj["functools"]
+                elif "name" in parsed_obj:
+                    parsed = [parsed_obj]
+            
+            if parsed and isinstance(parsed, list):
+                # Normalize the format
+                tool_calls = []
+                for item in parsed:
+                    if isinstance(item, dict) and "name" in item:
+                        tool_calls.append({
+                            "name": item.get("name"),
+                            "args": item.get("arguments", item.get("args", {})),
+                            "id": f"call_{len(tool_calls)}"
+                        })
+                
+                if tool_calls:
+                    response.tool_calls = tool_calls
+                    print(f"[Tool Agent] Converted to tool_calls: {tool_calls}")
+        except Exception as e:
+            print(f"[Tool Agent] Could not parse tool calls: {e}")
+    else:
+        print(f"[Tool Agent] Using existing tool_calls: {tool_calls}")
+    
+    return {
+        "messages": state["messages"] + [response],
+        "last_executor": "tool_agent" 
+    }
+
 
 
 # --- CODER AGENT ---
 coder_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools if t.name=="run_python"])
 def coder_agent(state: AgentState) -> AgentState:
-    print("[Coder Agent Invoked]")  # DEBUGGING ---------------
+    print("[Coder Agent Invoked]")
     system_prompt = SystemMessage(content=coder_system_prompt)
     response = coder_model.invoke([system_prompt] + state["messages"])
-    return {"messages": state["messages"] + [response]}
+    
+    print(f"[Coder Agent] Raw response content: {response.content}")
+    
+    # FIX: Same robust parsing as tool_agent
+    tool_calls = getattr(response, "tool_calls", None)
+    if not tool_calls or len(tool_calls) == 0:
+        try:
+            content = response.content.strip()
+            # Remove markdown code blocks if present
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            
+            parsed = None
+            if content.startswith("["):
+                parsed = json.loads(content)
+            elif content.startswith("{"):
+                parsed_obj = json.loads(content)
+                if "functools" in parsed_obj:
+                    parsed = parsed_obj["functools"]
+                elif "name" in parsed_obj:
+                    parsed = [parsed_obj]
+            
+            if parsed and isinstance(parsed, list):
+                tool_calls = []
+                for item in parsed:
+                    if isinstance(item, dict) and "name" in item:
+                        tool_calls.append({
+                            "name": item.get("name"),
+                            "args": item.get("arguments", item.get("args", {})),
+                            "id": f"call_{len(tool_calls)}"
+                        })
+                
+                if tool_calls:
+                    response.tool_calls = tool_calls
+                    print(f"[Coder Agent] Converted to tool_calls: {tool_calls}")
+        except Exception as e:
+            print(f"[Coder Agent] Could not parse tool calls: {e}")
+    
+    return {
+        "messages": state["messages"] + [response],
+        "last_executor": "coder_agent" 
+    }
 
 
 # --- VERIFIER AGENT ---
 verifier_model = ChatOllama(model="freakycoder123/phi4-fc")
 def verifier_agent(state: AgentState) -> AgentState:
-    print("[Verifier Agent Invoked]")  # DEBUGGING ---------------
-    VALID_DECISIONS = {"success", "retry_tool", "fallback_coder", "user_verifier", "failure"}
-
+    print("[Verifier Agent Invoked]")
+    VALID_DECISIONS = {"success", "retry", "user_verifier", "failure"}
+    
+    # Check if there are any ToolMessage results in recent messages
+    recent_messages = state["messages"][-5:]  # Check last 5 messages
+    has_tool_results = any(isinstance(msg, ToolMessage) for msg in recent_messages)
+    
+    print(f"[Verifier] Has tool results in recent messages: {has_tool_results}")
+    
+    # If no tool results found, default to user_verifier to be safe
+    if not has_tool_results:
+        print("[Verifier] No tool execution detected, routing to user_verifier")
+        return {
+            "messages": state["messages"],
+            "completed_tools": state.get("completed_tools", []),
+            "verifier_decision": "user_verifier",
+        }
+    
     system_prompt = SystemMessage(content=verifier_system_prompt)
     response = verifier_model.invoke([system_prompt] + state["messages"])
-    decision = response.content.strip().lower()
-
-    if decision not in VALID_DECISIONS:
-        # Default safety net
-        decision = "user_verifier"
-
+    decision_text = response.content.strip().lower()
+    
+    print(f"[Verifier] Raw response: {decision_text}")
+    
+    # FIX: Better parsing - extract decision from mixed JSON/text response
+    decision = "user_verifier"  # default
+    for valid_decision in VALID_DECISIONS:
+        if valid_decision in decision_text:
+            decision = valid_decision
+            break
+    
+    print(f"[Verifier] Parsed decision: {decision}")
+    
     return {
         "messages": state["messages"] + [response],
         "completed_tools": state.get("completed_tools", []),
         "verifier_decision": decision,
     }
 
+# Verifier routing decision
+def verifier_routing(state: AgentState) -> str:
+    decision = state.get("verifier_decision", "user_verifier")
+    
+    if decision == "retry":
+        last_executor = state.get("last_executor", "tool_agent")
+        return last_executor
+    elif decision == "success":
+        return "planner"
+    elif decision == "user_verifier":
+        return "user_verifier"
+    else:  # failure
+        return "exit"
 
 # --- USER VERIFIER AGENT ---
 def user_verifier(state: AgentState) -> AgentState:
-    print("[User Verifier Invoked]")  # DEBUGGING ---------------
+    print("[User Verifier Invoked]")
     # Ask user directly
     user_msg = HumanMessage(content="Does the last step result look correct? (yes / no / abort)")
     # Save for trace
     state["messages"] = state["messages"] + [user_msg]
 
-    # Here you’d hook into actual user input (e.g., CLI, web UI, chat frontend)
-    print("[User Verifier] Does the last step result look correct? Options: (yes / no / abort)")
-    user_reply = input("Input: ").strip().lower()
+    # Here you'd hook into actual user input (e.g., CLI, web UI, chat frontend)
+    print("\n" + "="*60)
+    print("[User Verifier] Does the last step result look correct?")
+    print("Options: yes / no / abort")
+    print("="*60)
+    user_reply = input("Your decision: ").strip().lower()
 
+    # Validate decision
     if user_reply not in {"yes", "no", "abort"}:
-        user_reply = "abort"  # safety default
+        print(f"Invalid input '{user_reply}'. Defaulting to 'abort' for safety.")
+        user_reply = "abort"
+
+    # Ask for optional context if user said 'no'
+    if user_reply == "no":
+        print("\n[Optional] Please provide context on what's wrong (or press Enter to skip):")
+        context = input("Context: ").strip()
+        if context:
+            # Add user's context as a message to help the agent understand the issue
+            context_msg = HumanMessage(content=f"User feedback: {context}")
+            state["messages"] = state["messages"] + [context_msg]
+            print(f"[User Verifier] Context recorded: {context}")
 
     state["user_verifier_decision"] = user_reply
+    print(f"[User Verifier] Decision: {user_reply}")
     return state
+
 
 
 # -----------------------------------------------------------------------------------------
 
-# --- Generated Tools saving ---
-def generate_tool_node(code: str, tool_name: str):
-    """Save generated Python code into app/tools so it's reusable later."""
-    filename = f"app/tools/{tool_name}.py"
-    with open(filename, "w") as f:
-        f.write(textwrap.dedent(code))
-    print(f"New tool saved: {filename}")
-    
+
 
 # ---------- Build the Agent App / Graph --------------
 
@@ -218,42 +338,56 @@ def should_continue(state: AgentState, agent_type="tools"):
     last_message = state["messages"][-1]
     completed = state.get("completed_tools", [])
     tool_calls = getattr(last_message, "tool_calls", []) or []
+    
+    print(f"[should_continue] agent_type={agent_type}, tool_calls={tool_calls}, completed={completed}")
 
     # Tools agent → missing tool → handoff to coder
     if agent_type == "tools":
         unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools]]
         if unavailable_tools:
+            print(f"[should_continue] Unavailable tools found: {unavailable_tools}")
             return "coder_agent"
 
     # Pending tool calls → send to executor
     pending = [t for t in tool_calls if t.get("name") not in completed]
     if pending:
+        print(f"[should_continue] Pending tools: {pending}")
         return "execute"
 
     # No pending, no unavailable → go verify
+    print("[should_continue] No pending tools, going to exit")
     return "exit"
 
-# Helper function to execute tool and track completed tools# Define tool_node ONCE outside the function
 
+# Helper function to execute tool and track completed tools
 def execute_tool_with_tracking(state: AgentState) -> AgentState:
     print("[Execute Tool Invoked]")
     
-    # Invoke the tool node properly
+    # Invoke the tool node - it handles everything automatically
     result = tool_node.invoke(state)
     
-    # Track completed tools
-    last_msg = state["messages"][-1]
-    tool_calls = getattr(last_msg, "tool_calls", []) or []
+    print(f"[Execute Tool] Tool execution complete")
+    print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
     
-    completed = result.get("completed_tools", [])
-    for tc in tool_calls:
-        tool_name = tc.get("name")
-        if tool_name and tool_name not in completed:
-            completed.append(tool_name)
+    # Optional: Track which tools were just executed (extract from the tool calls in last AI message)
+    # This is only useful if you want to reference completed_tools elsewhere
+    messages = result.get("messages", [])
+    if len(messages) >= 2:
+        # The second-to-last message should be the AI message with tool_calls
+        ai_msg = messages[-2]
+        tool_calls = getattr(ai_msg, "tool_calls", []) or []
+        
+        # Get existing completed tools and add new ones
+        completed = state.get("completed_tools", []).copy()
+        for tc in tool_calls:
+            tool_name = tc.get("name")
+            if tool_name and tool_name not in completed:
+                completed.append(tool_name)
+        
+        result["completed_tools"] = completed
+        print(f"[Execute Tool] Completed tools: {completed}")
     
-    result["completed_tools"] = completed
     return result
-
 
 # Build the state graph
 graph = StateGraph(AgentState)
@@ -320,13 +454,13 @@ graph.add_edge("execute_tool", "verifier_agent")
 # Verifier decides next step
 graph.add_conditional_edges(
     "verifier_agent",
-    lambda state: state.get("verifier_decision", "user_verifier"),
+    verifier_routing,
     {
-        "success": "planner_agent",
-        "retry_tool": "execute_tool",
-        "fallback_coder": "coder_agent",
+        "tool_agent": "tool_agent",     # retry with tooler
+        "coder_agent": "coder_agent",   # retry with coder
+        "planner": "planner_agent",     # success, next subtask
         "user_verifier": "user_verifier",
-        "failure": END,
+        "exit": END
     }
 )
 
@@ -344,7 +478,7 @@ graph.add_edge("chat_agent", END)
 app = graph.compile()
 
 
-# --- Run the Agent ----------------------------------------------------------
+# --------------------------- Run the Agent ----------------------------------------------
 def print_stream(stream):
     for s in stream:
         message = s["messages"][-1]
@@ -368,8 +502,7 @@ def print_stream(stream):
                 print(message)
 
 
-
-# Main loop
+# ------------------------ Main Loop (CLI) --------------------------------------------
 while True:
     user_input = input("\nEnter your request (or type 'exit' to quit): ")
     if user_input.lower() in ["exit", "quit", "q"]:

@@ -3,7 +3,7 @@ import os
 
 # -------------- Define allowed OS apps --------------
 ALLOWED_OS_ACTIONS = {
-    "calc": ["calc.exe"],            # Calculator
+    "calculator": ["calc.exe"],            # Calculator
     "word": [r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"],  # adjust path
     "notepad": ["notepad.exe"],
 }
