@@ -9,11 +9,11 @@ from agents.agent_state import tools_list
 # -------------------------------------- Initial Setup ---------------------------------------
 from agents.agent_state import AgentState
 
-# ------ AGENT NODES 
+# AGENT NODES 
 from agents.router_agent import router_node, router_decision
 from agents.planner_agent import planner_agent, planner_decision
 from agents.chatter_agent import chat_agent
-from agents.tools_agent import tool_agent
+from agents.tooler_agent import tooler_agent
 from agents.coder_agent import coder_agent
 from agents.verifier_agent import verifier_agent, verifier_routing
 from agents.user_verifier import user_verifier
@@ -22,50 +22,47 @@ tool_node = ToolNode(tools=tools_list)
 
 # ------------------------------ Helper Functions for the graph ------------------------------
 
-def should_continue(state: AgentState, agent_type="tools"): # For both tooler and coder
-    last_message = state["messages"][-1]
-    completed = state.get("completed_tools", [])
-    tool_calls = getattr(last_message, "tool_calls", []) or []
+# def should_continue(state: AgentState, agent_type="tools"): # For both tooler and coder
+#     last_message = state["messages"][-1]
+#     completed = state.get("completed_tools", [])
+#     tool_calls = getattr(last_message, "tool_calls", []) or []
     
-    print(f"[should_continue] agent_type={agent_type}, tool_calls={tool_calls}, completed={completed}")
+#     print(f"[should_continue] agent_type={agent_type}, tool_calls={tool_calls}, completed={completed}")
 
-    # Tools agent → missing tool → handoff to coder
-    if agent_type == "tools":
-        unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools_list]]
-        if unavailable_tools:
-            print(f"[should_continue] Unavailable tools found: {unavailable_tools}")
-            return "coder_agent"
+#     # Tools agent → missing tool → handoff to coder
+#     if agent_type == "tools":
+#         unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools_list]]
+#         if unavailable_tools:
+#             print(f"[should_continue] Unavailable tools found: {unavailable_tools}")
+#             return "coder_agent"
 
-    # Pending tool calls → send to executor
-    pending = [t for t in tool_calls if t.get("name") not in completed]
-    if pending:
-        print(f"[should_continue] Pending tools: {pending}")
-        return "execute"
+#     # Pending tool calls → send to executor
+#     pending = [t for t in tool_calls if t.get("name") not in completed]
+#     if pending:
+#         print(f"[should_continue] Pending tools: {pending}")
+#         return "execute"
 
-    # No pending, no unavailable → go verify
-    print("[should_continue] No pending tools, going to exit")
-    return "exit"
+#     # No pending, no unavailable → go verify
+#     print("[should_continue] No pending tools, going to exit")
+#     return "exit"
 
 
 # Helper function to execute tool and track completed tools
 def execute_tool_with_tracking(state: AgentState) -> AgentState:
     print("[Execute Tool Invoked]")
     
-    # Invoke the tool node - it handles everything automatically
+    # Invoke the tool node (handles tool execution + adding ToolMessages)
     result = tool_node.invoke(state)
     
     print(f"[Execute Tool] Tool execution complete")
     print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
     
-    # Optional: Track which tools were just executed (extract from the tool calls in last AI message)
-    # This is only useful if you want to reference completed_tools elsewhere
+    # Track completed tools (from the last AI message’s tool_calls)
     messages = result.get("messages", [])
-    if len(messages) >= 2:
-        # The second-to-last message should be the AI message with tool_calls
-        ai_msg = messages[-2]
+    ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
+    if ai_msg:
         tool_calls = getattr(ai_msg, "tool_calls", []) or []
         
-        # Get existing completed tools and add new ones
         completed = state.get("completed_tools", []).copy()
         for tc in tool_calls:
             tool_name = tc.get("name")
@@ -86,7 +83,7 @@ graph = StateGraph(AgentState)
 graph.add_node("router", router_node)
 graph.add_node("chat_agent", chat_agent)
 graph.add_node("planner_agent", planner_agent)
-graph.add_node("tool_agent", tool_agent)
+graph.add_node("tooler_agent", tooler_agent)
 graph.add_node("coder_agent", coder_agent)
 graph.add_node("execute_tool", execute_tool_with_tracking)
 graph.add_node("verifier_agent", verifier_agent)
@@ -109,34 +106,17 @@ graph.add_conditional_edges(
 graph.add_conditional_edges(
     "planner_agent", planner_decision, 
     {
-        "tool_agent": "tool_agent",
+        "tooler_agent": "tooler_agent",
         "coder_agent": "coder_agent",
         "exit": END
     }
 )
 
-
 # Can tool agent do the task?
-graph.add_conditional_edges(
-    "tool_agent", 
-    lambda state: should_continue(state, agent_type="tools"), 
-    {
-        "execute": "execute_tool",
-        "coder_agent": "coder_agent",
-        "exit": "verifier_agent"
-    }
-)
+graph.add_edge("tooler_agent","execute_tool")
 
-
-# Coder agent execution complete?
-graph.add_conditional_edges(
-    "coder_agent", 
-    lambda state: should_continue(state, agent_type="code"), 
-    {
-        "execute": "execute_tool",
-        "exit": "verifier_agent"
-    }
-)
+# Coder agent execution
+graph.add_edge("coder_agent", "execute_tool")
 
 # Always verify after execution
 graph.add_edge("execute_tool", "verifier_agent")
@@ -146,7 +126,7 @@ graph.add_conditional_edges(
     "verifier_agent",
     verifier_routing,
     {
-        "tool_agent": "tool_agent",     # retry with tooler
+        "tooler_agent": "tooler_agent",     # retry with tooler
         "coder_agent": "coder_agent",   # retry with coder
         "planner": "planner_agent",     # success, next subtask
         "user_verifier": "user_verifier",
@@ -159,12 +139,13 @@ graph.add_conditional_edges(
     lambda state: state.get("user_verifier_decision", "abort"),
     {
         "yes": "planner_agent",    # continue to next step
-        "no": "execute_tool",      # retry tool execution
+        "no": "verifier_agent",      # tell verifier to retry
         "abort": END               # stop the graph
     }
 )
 
 graph.add_edge("chat_agent", END)
+
 app = graph.compile()
 
 
@@ -180,7 +161,7 @@ def print_stream(stream):
                 args = call.get("arguments", {})
 
                 # Find the actual tool function
-                tool_func = next((t for t in tools if t.name == tool_name), None)
+                tool_func = next((t for t in tools_list if t.name == tool_name), None)
                 if tool_func:
                     result = tool_func(**args)
                     print(f"[Tool: {tool_name}] Output: {result}")

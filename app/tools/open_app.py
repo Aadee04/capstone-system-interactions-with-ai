@@ -25,5 +25,5 @@ def run_safe_os_command(app_name: str):
 
 @tool("open_app")
 def open_app(app_name: str = "") -> str:
-    """Safely open a desktop application if whitelisted."""
+    """Safely open a desktop application if whitelisted. Currently supports: calculator, word, notepad."""
     return run_safe_os_command(app_name)

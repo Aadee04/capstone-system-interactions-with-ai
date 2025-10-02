@@ -17,3 +17,17 @@ def discover_tools():
     print(f"Discovered {len(tools)} tools: {[tool.name for tool in tools]}\n")
 
     return tools
+
+def discover_tools_descriptions():
+    tools_strings = []
+    for file in os.listdir("app/tools"):
+        if file.endswith(".py") and file != "__init__.py":
+            name = file[:-3]
+            module = importlib.import_module(f"tools.{name}")
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
+                    tools_strings.append(f"{attr.name}: {attr.description}")
+    
+    # Join all tools into a single string separated by newlines
+    return "\n".join(tools_strings)

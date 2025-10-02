@@ -1,10 +1,12 @@
 from typing import Annotated, Sequence, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
-from discover_tools import discover_tools
+from agents.discover_app import discover_tools, discover_tools_descriptions
+
 
 tools_list = discover_tools()
 tool_list_str = ", ".join([t.name for t in tools_list])
+tool_list_with_desc_str = discover_tools_descriptions()
 
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -17,11 +19,12 @@ class AgentState(TypedDict, total=False):
     tooler_tries: int
     coder_tries: int
     verifier_decision: str
+    tool_calls: list[dict]
 
 def create_initial_state() -> AgentState:
     return {
         "messages": [BaseMessage(content="")],
-        "route": "router",
+        "route": "",
         "tasks": [],
         "subtask_index": 0,
         "current_subtask": "",
@@ -29,5 +32,6 @@ def create_initial_state() -> AgentState:
         "user_context": "",
         "tooler_tries": 0,
         "coder_tries": 0,
-        "verifier_decision": ""
+        "verifier_decision": "",
+        "tool_calls": []
     }
