@@ -25,6 +25,8 @@ No tool can achieve this → "failure"
 Repeated failure → "escalate"
 Wrong tool used → "escalate"
 Repeated failure after coder execution → "failure"
+Code related tasks → "escalate"
+
 """
 
 verifier_model = ChatOllama(model="freakycoder123/phi4-fc")
@@ -75,8 +77,8 @@ def verifier_routing(state: AgentState) -> str:
     elif user_verifier_decision == "no":
         print("[Verifier Routing] User said no, retrying tool execution.")
         return state.get("current_executor", "tooler_agent")
-    
-    
+
+        
     if decision == "retry":
         current_executor = state.get('current_executor', "tooler_agent")
         return current_executor

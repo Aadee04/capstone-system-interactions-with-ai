@@ -19,7 +19,7 @@ def discover_tools():
     return tools
 
 def discover_tools_descriptions():
-    tools_strings = []
+    tools_list = []
     for file in os.listdir("app/tools"):
         if file.endswith(".py") and file != "__init__.py":
             name = file[:-3]
@@ -27,7 +27,6 @@ def discover_tools_descriptions():
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
-                    tools_strings.append(f"{attr.name}: {attr.description}")
-    
-    # Join all tools into a single string separated by newlines
-    return "\n".join(tools_strings)
+                    tools_list.append((attr.name, attr.description))
+    return tools_list
+

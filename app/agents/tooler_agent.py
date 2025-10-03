@@ -4,9 +4,16 @@ import json
 from agents.agent_state import AgentState
 from agents.agent_state import tools_list, tool_list_with_desc_str
 
+available_tools_str = "\n".join(
+    f"{name}: {desc}" 
+    for name, desc in tool_list_with_desc_str
+    if name != "run_python"
+)
+
+print("Available tools for Tooler Agent:", available_tools_str)
 
 tooler_system_prompt = f"""You are a desktop tool executor. You are given one subtask to complete.
-Available tools: {tool_list_with_desc_str}
+Available tools: { available_tools_str }
 
 CRITICAL:
 - Select the ONE most appropriate tool for the request
@@ -14,6 +21,8 @@ CRITICAL:
 - Do not explain, do not add extra text
 - Just output the function call in JSON format
 - Use EXACT tool names and correct argument keys
+- Do Not Attempt to code or use "run_python"
+- If no tool can help, respond with {{"name": "no_op", "args": {{}}}}
 
 You will be judged on whether the tool executed successfully for that subtask.
 Do NOT declare success/failure yourself - that's the verifier's job.
