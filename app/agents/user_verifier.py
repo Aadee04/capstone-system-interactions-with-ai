@@ -1,11 +1,11 @@
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from agents.agent_state import AgentState
 
 
 def user_verifier(state: AgentState) -> AgentState:
     print("[User Verifier Invoked] Subtask:", state['current_subtask'])
     
-    user_msg = HumanMessage(content="Does the last step result look correct? (yes / no / abort)")
+    user_msg = AIMessage(content="Does the last step result look correct? (yes / no / abort)")
     state["messages"] = state["messages"] + [user_msg]
 
     print("\n" + "="*60)

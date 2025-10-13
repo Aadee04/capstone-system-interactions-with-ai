@@ -5,7 +5,7 @@ from agents.discover_app import discover_tools, discover_tools_descriptions
 
 
 tools_list = discover_tools()
-tool_list_str = ", ".join([t.name for t in tools_list])
+# tool_list_str = ", ".join([t.name for t in tools_list])
 tool_list_with_desc_str = discover_tools_descriptions()
 
 class AgentState(TypedDict, total=False):

@@ -1,6 +1,6 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama
-import json
+import json, re
 from agents.agent_state import AgentState
 from agents.agent_state import tools_list, tool_list_with_desc_str
 
@@ -44,7 +44,7 @@ def tooler_agent(state: AgentState) -> AgentState:
     system_prompt = SystemMessage(content=tooler_system_prompt)
     response = tooler_model.invoke(
         [system_prompt] +
-        [HumanMessage(content=state['current_subtask'])] +
+        [HumanMessage(content=str(state['current_subtask']))] +
         ([HumanMessage(content=state['user_context'])] if state['user_context'] else [])
     )
     
@@ -57,12 +57,8 @@ def tooler_agent(state: AgentState) -> AgentState:
         print("[Tool Agent] No tool_calls found, attempting to parse from content")
         try:
             content = response.content.strip()
-            # Remove markdown code blocks if present
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-                content = content.strip()
+            # Strip markdown code blocks
+            content = re.sub(r"^```(?:json)?|```$", "", content, flags=re.MULTILINE).strip()
             
             # Try to parse as JSON
             parsed = None
@@ -80,12 +76,12 @@ def tooler_agent(state: AgentState) -> AgentState:
             if parsed and isinstance(parsed, list):
                 # Normalize the format
                 tool_calls = []
-                for item in parsed:
+                for idx, item in enumerate(parsed):
                     if isinstance(item, dict) and "name" in item:
                         tool_calls.append({
-                            "name": item.get("name"),
+                            "name": item["name"],
                             "args": item.get("arguments", item.get("args", {})),
-                            "id": f"call_{len(tool_calls)}"
+                            "id": f"call_{idx}"
                         })
                 
                 if tool_calls:
@@ -96,5 +92,5 @@ def tooler_agent(state: AgentState) -> AgentState:
     
     return {
         "messages": state["messages"] + [response],
-        "tool_calls": response.tool_calls or []
+        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or [])
     }
