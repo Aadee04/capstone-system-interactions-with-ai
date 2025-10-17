@@ -10,22 +10,28 @@ These are the available tools: {tool_list_with_desc_str}
 
 Reply with EXACTLY ONE of these words:
 - "success" (task completed, move to next subtask)
-- "retry" (same approach failed, try again)
+- "retry" (same approach failed, try again - max 2 retries per task)
 - "user_verifier" (unclear, ask user)
 - "failure" (impossible to complete)
-- "escalate" (retry with coder if tool missing)
+- "escalate" (retry with coder if tool missing or calculations needed)
 
 ONE WORD ONLY. No explanations.
 
+Escalation Guidelines:
+- Tooler failed on calculations/math → "escalate"
+- Tooler used wrong tool repeatedly → "escalate" 
+- Task requires programming logic → "escalate"
+- No appropriate tool exists → "escalate"
+- After 2+ tooler retries → "escalate"
+- Coder failed after escalation → "failure"
+
 Examples:
 Tool executed correctly → "success"
-Tool failed with error → "retry"
-Tool output unclear, user context needed → "user_verifier"
-No tool can achieve this → "failure"
-Repeated failure → "escalate"
-Wrong tool used → "escalate"
-Repeated failure after coder execution → "failure"
-Code related tasks → "escalate"
+Tool failed with error (first time) → "retry"
+Tool failed 2+ times → "escalate"
+Calculation task with tools → "escalate"
+Programming task with tools → "escalate"
+Coder execution failed → "failure"
 
 """
 
@@ -36,6 +42,11 @@ def verifier_agent(state: AgentState) -> AgentState:
     # --- Handle direct user feedback overrides first ---
     user_verifier_decision = state.get("user_verifier_decision", "")
     subtask_index = state.get("subtask_index", 0)
+    current_executor = state.get("current_executor", "")
+    
+    # Track retry attempts
+    tooler_tries = state.get("tooler_tries", 0)
+    coder_tries = state.get("coder_tries", 0)
 
     if user_verifier_decision:
         if user_verifier_decision == "abort":
@@ -78,11 +89,33 @@ def verifier_agent(state: AgentState) -> AgentState:
     # --- Parse valid decision, default to user verifier ---
     decision = next((d for d in VALID_DECISIONS if d in decision_text), "user_verifier")
     print(f"[Verifier] Parsed decision: {decision}")
-
-    return {
+    
+    # Apply retry limits and escalation logic
+    if decision == "retry":
+        if current_executor == "tooler_agent" and tooler_tries >= 2:
+            print(f"[Verifier] Tooler tried {tooler_tries} times, escalating to coder")
+            decision = "escalate"
+        elif current_executor == "coder_agent" and coder_tries >= 2:
+            print(f"[Verifier] Coder tried {coder_tries} times, marking as failure")
+            decision = "failure"
+    
+    # Update retry counters
+    new_state = {
         "verifier_decision": decision,
         "subtask_index": subtask_index + 1 if decision == "success" else subtask_index
     }
+    
+    if decision == "retry":
+        if current_executor == "tooler_agent":
+            new_state["tooler_tries"] = tooler_tries + 1
+        elif current_executor == "coder_agent":
+            new_state["coder_tries"] = coder_tries + 1
+    elif decision == "success":
+        # Reset retry counters for next task
+        new_state["tooler_tries"] = 0
+        new_state["coder_tries"] = 0
+    
+    return new_state
 
 
 # Verifier routing decision

@@ -104,6 +104,6 @@ def coder_agent(state: AgentState) -> AgentState:
             print(f"[Coder Agent] Could not parse tool calls: {e}")
     
     return {
-        "messages": state["messages"] + [response],
-        "tool_calls": response.tool_calls or []  # TODO ADD NOT OVERWRITE MAYBE
+        "messages": [response],  # Only return new message
+        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or [])
     }

@@ -129,8 +129,7 @@ graph.add_conditional_edges(
         "tooler_agent": "tooler_agent",     # retry with tooler
         "coder_agent": "coder_agent",   # retry with coder
         "planner": "planner_agent",     # success, next subtask
-        "user_verifier": "planner_agent", # TODO REMOVE 
-        # "user_verifier": "user_verifier",
+        "user_verifier": "user_verifier",
         "exit": END
     }
 )

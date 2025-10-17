@@ -6,7 +6,6 @@ def user_verifier(state: AgentState) -> AgentState:
     print("[User Verifier Invoked] Subtask:", state['current_subtask'])
     
     user_msg = AIMessage(content="Does the last step result look correct? (yes / no / abort)")
-    state["messages"] = state["messages"] + [user_msg]
 
     print("\n" + "="*60)
     print("[User Verifier] Does the last step result look correct?")
@@ -27,11 +26,10 @@ def user_verifier(state: AgentState) -> AgentState:
 
     print(f"[User Verifier] Decision: {user_reply}")
     decision_msg = HumanMessage(content=f"User decision: {user_reply}")
-    state["messages"] = state["messages"] + [decision_msg]
 
     return {
         "user_context": context,
-        "messages": state["messages"],
+        "messages": [user_msg, decision_msg],  # Only return new messages
         "user_verifier_decision": user_reply
         }
 

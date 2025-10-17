@@ -30,13 +30,10 @@ def chat_agent(state: AgentState) -> AgentState:
 
     if not state["messages"][-1].content.strip():
         response = AIMessage(content="Hi! How can I assist you today?")
-        return {"messages": state["messages"] + [response]}
+        return {"messages": [response]}  # Only return new message
     
     system_as_human  = HumanMessage(content=(chatter_system_prompt))
-    
     response = chat_model.invoke([system_as_human ] + state["messages"])
-
-    clean_resp = response.content.strip().split("\n\n")[0]
-
+    clean_resp = response.content.strip().split("\n\n")[0] 
     
-    return {"messages": state["messages"] + [AIMessage(content=clean_resp)]}
+    return {"messages": [AIMessage(content=clean_resp)]}  # Only return new message

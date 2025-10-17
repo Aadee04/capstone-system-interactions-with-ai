@@ -21,23 +21,38 @@ Don't wait for tasks to complete, just list them out.
 
 Available tools in tooler for context: """ + available_tools_str + """
 
-Coder just generates code.
+Coder generates Python code using run_python tool.
 If any request is purely conversational or vague, respond with a single subtask "done" and "exit" as current_executor.
 
-Output a list of all subtasks that need to be done to fulfill the user's request. In this format:
+IMPORTANT: You can now specify different executors for different subtasks using the enhanced format below.
+
+Output format options:
+
+1. SIMPLE FORMAT (all tasks use same executor):
 {
   "tasks": ["<description of the subtask>", ...],
+  "current_executor": "tooler_agent"
+}
+
+2. ENHANCED FORMAT (different executors per task):
+{
+  "tasks": [
+    {"task": "<description>", "executor": "tooler_agent"},
+    {"task": "<description>", "executor": "coder_agent"},
+    ...
+  ],
   "current_executor": "tooler_agent"
 }
 
 CRITICAL RULES:
 - "current_executor" field MUST be EXACTLY either "tooler_agent" OR "coder_agent" (nothing else)
 - Use "tooler_agent" for desktop actions (opening apps, browsers, files, system operations)
-- Use "coder_agent" for calculations, data processing, or programming tasks
+- Use "coder_agent" for calculations, data processing, programming tasks, or when tools are insufficient
+- DEFAULT to tooler_agent unless the task explicitly requires coding/calculations
 - DO NOT specify tool names — the tooler agent will select the appropriate tool automatically
 - Always end the list with a final subtask "done"
 - If parameters are needed (like a URL), include them directly in the subtask string.
-- Keep subtasks descriptive but simple. Avoid dictionaries or nested structures.
+- Keep subtasks descriptive but simple. Use enhanced format when mixing tool and code tasks.
 
 Examples:
 
@@ -63,7 +78,15 @@ Request: "Do nothing"
 Response: {"tasks": ["done"], "current_executor": "exit"}
 
 Request: "Open Miniclip.com and Gmail.com in Chrome, then calculate the sum of 45 and 32"
-Response: {"tasks": ["Open Chrome browser and go to https://www.miniclip.com", "Open Chrome browser and go to https://mail.google.com", "Calculate sum of 45 and 32", "done"], "current_executor": "tooler_agent"}
+Response: {
+  "tasks": [
+    {"task": "Open Chrome browser and go to https://www.miniclip.com", "executor": "tooler_agent"},
+    {"task": "Open Chrome browser and go to https://mail.google.com", "executor": "tooler_agent"},
+    {"task": "Calculate sum of 45 and 32", "executor": "coder_agent"},
+    "done"
+  ],
+  "current_executor": "tooler_agent"
+}
 
 Request: "Search Google for cute cats"
 Response: {"tasks": ["Open Chrome browser and go to https://www.google.com/search?q=cute+cats", "done"], "current_executor": "tooler_agent"}
@@ -121,7 +144,43 @@ Response: {"tasks": ["Ping google.com", "done"], "current_executor": "tooler_age
 
 Request: "Create a folder named 'Projects' and move report.pdf into it"
 Response: {"tasks": ["Create folder named 'Projects'", "Move report.pdf into 'Projects'", "done"], "current_executor": "tooler_agent"}
+
+Request: "Open notepad, write a hello world program, and calculate 15*23"
+Response: {
+  "tasks": [
+    {"task": "Open Notepad", "executor": "tooler_agent"},
+    {"task": "Write hello world program in Python", "executor": "coder_agent"},
+    {"task": "Calculate 15*23", "executor": "coder_agent"},
+    "done"
+  ],
+  "current_executor": "tooler_agent"
+}
+
+Request: "Open task manager and kill any chrome processes"
+Response: {"tasks": ["Open task manager", "Kill Chrome processes", "done"], "current_executor": "tooler_agent"}
 """
+
+
+def categorize_task(task_description: str) -> str:
+    """
+    Determine if a task should use tooler or coder based on keywords.
+    Returns 'tooler_agent' or 'coder_agent'.
+    """
+    task_lower = task_description.lower()
+    
+    # Explicit coding tasks
+    coding_keywords = [
+        "write code", "python code", "script", "program", "function",
+        "calculate", "compute", "math", "sum", "multiply", "divide",
+        "plot", "graph", "chart", "data processing", "algorithm",
+        "factorial", "fibonacci", "sort", "average", "statistics"
+    ]
+    
+    if any(keyword in task_lower for keyword in coding_keywords):
+        return "coder_agent"
+    
+    # Everything else defaults to tooler (faster, with escalation fallback)
+    return "tooler_agent"
 
 
 def safe_json_parse(content: str):
@@ -152,16 +211,30 @@ def planner_agent(state: AgentState) -> AgentState:
         subtask_index = state["subtask_index"]
         tasks = state.get("tasks", [])
 
-        if subtask_index >= len(tasks) or state.get("tasks")[subtask_index] == "done":
+        if subtask_index >= len(tasks) or (
+            isinstance(tasks[subtask_index], str) and tasks[subtask_index] == "done"
+        ) or (
+            isinstance(tasks[subtask_index], dict) and tasks[subtask_index].get("task") == "done"
+        ):
             return {
                 "current_executor": "exit",
                 "current_subtask": "done",
                 "subtask_index": subtask_index
             }
 
+        current_task = tasks[subtask_index]
+        
+        # Handle both simple string format and enhanced dict format
+        if isinstance(current_task, dict):
+            current_subtask = current_task.get("task", "done")
+            current_executor = current_task.get("executor", "tooler_agent")
+        else:
+            current_subtask = current_task
+            current_executor = state.get("current_executor", "tooler_agent")
+
         return {
-            "current_executor": state.get("current_executor", "tooler_agent"),
-            "current_subtask": tasks[subtask_index],
+            "current_executor": current_executor,
+            "current_subtask": current_subtask,
             "subtask_index": subtask_index
         }
 
@@ -180,16 +253,32 @@ def planner_agent(state: AgentState) -> AgentState:
     print(f"[Planner parsed]: {parsed}")  # DEBUGGING ---------------
     
     if isinstance(parsed, dict):
-        response.tasks = parsed.get("tasks", ["done"])
-        response.current_executor = parsed.get("current_executor", "tooler_agent")
+        tasks = parsed.get("tasks", ["done"])
+        current_executor = parsed.get("current_executor", "tooler_agent")
+        
+        # Handle enhanced format with per-task executors
+        if tasks and isinstance(tasks[0], dict) and "task" in tasks[0]:
+            # Enhanced format: [{"task": "...", "executor": "..."}, ...]
+            response.tasks = tasks
+            # Use the executor of the first task, or fallback to default
+            if "executor" in tasks[0]:
+                response.current_executor = tasks[0]["executor"]
+            else:
+                response.current_executor = current_executor
+            response.subtask = tasks[0].get("task", "done")
+        else:
+            # Simple format: ["task1", "task2", ...]
+            response.tasks = tasks
+            response.current_executor = current_executor
+            response.subtask = tasks[0] if tasks else "done"
     elif isinstance(parsed, list):
         response.tasks = parsed
         response.current_executor = "tooler_agent"  # default for lists
+        response.subtask = parsed[0] if parsed else "done"
     else:
         response.tasks = ["done"]
         response.current_executor = "exit"
-
-    response.subtask = response.tasks[0] if response.tasks else "done"
+        response.subtask = "done"
 
     return {
         "current_executor": response.current_executor,

@@ -91,6 +91,6 @@ def tooler_agent(state: AgentState) -> AgentState:
             print(f"[Tool Agent] Could not parse tool calls: {e}")
     
     return {
-        "messages": state["messages"] + [response],
+        "messages": [response],  # Only return new message
         "tool_calls": state.get("tool_calls", []) + (response.tool_calls or [])
     }
