@@ -10,7 +10,6 @@ from agents.agent_state import tools_list
 from agents.agent_state import AgentState
 
 # AGENT NODES 
-from agents.router_agent import router_node, router_decision
 from agents.planner_agent import planner_agent, planner_decision
 from agents.chatter_agent import chat_agent
 from agents.tooler_agent import tooler_agent
@@ -21,31 +20,6 @@ from agents.user_verifier import user_verifier
 tool_node = ToolNode(tools=tools_list)
 
 # ------------------------------ Helper Functions for the graph ------------------------------
-
-# def should_continue(state: AgentState, agent_type="tools"): # For both tooler and coder
-#     last_message = state["messages"][-1]
-#     completed = state.get("completed_tools", [])
-#     tool_calls = getattr(last_message, "tool_calls", []) or []
-    
-#     print(f"[should_continue] agent_type={agent_type}, tool_calls={tool_calls}, completed={completed}")
-
-#     # Tools agent → missing tool → handoff to coder
-#     if agent_type == "tools":
-#         unavailable_tools = [t for t in tool_calls if t["name"] not in [x.name for x in tools_list]]
-#         if unavailable_tools:
-#             print(f"[should_continue] Unavailable tools found: {unavailable_tools}")
-#             return "coder_agent"
-
-#     # Pending tool calls → send to executor
-#     pending = [t for t in tool_calls if t.get("name") not in completed]
-#     if pending:
-#         print(f"[should_continue] Pending tools: {pending}")
-#         return "execute"
-
-#     # No pending, no unavailable → go verify
-#     print("[should_continue] No pending tools, going to exit")
-#     return "exit"
-
 
 # Helper function to execute tool and track completed tools
 def execute_tool_with_tracking(state: AgentState) -> AgentState:
@@ -80,39 +54,32 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
 graph = StateGraph(AgentState)
 
 # Nodes
-graph.add_node("router", router_node)
-graph.add_node("chat_agent", chat_agent)
 graph.add_node("planner_agent", planner_agent)
+graph.add_node("chatter_agent", chat_agent)
 graph.add_node("tooler_agent", tooler_agent)
 graph.add_node("coder_agent", coder_agent)
 graph.add_node("execute_tool", execute_tool_with_tracking)
 graph.add_node("verifier_agent", verifier_agent)
 graph.add_node("user_verifier", user_verifier)
 
-# Entry point
-graph.set_entry_point("router")
+# Entry point - planner is now the entry point
+graph.set_entry_point("planner_agent")
 
-# Main Routing Branch
-graph.add_conditional_edges(
-    "router",
-    router_decision,
-    {
-        "chat": "chat_agent",
-        "planner": "planner_agent"
-    }
-)
-
-# Planner sends subtask to agent
+# Planner sends subtask to appropriate agent
 graph.add_conditional_edges(
     "planner_agent", planner_decision, 
     {
-        "tooler_agent": "tooler_agent",
+        "chatter_agent": "chatter_agent",
+        "tooler_agent": "tooler_agent", 
         "coder_agent": "coder_agent",
         "exit": END
     }
 )
 
-# Can tool agent do the task?
+# Chatter goes directly to verifier (verify output)
+graph.add_edge("chatter_agent", "verifier_agent")
+
+# Tooler agent execution
 graph.add_edge("tooler_agent","execute_tool")
 
 # Coder agent execution
@@ -126,11 +93,12 @@ graph.add_conditional_edges(
     "verifier_agent",
     verifier_routing,
     {
-        "tooler_agent": "tooler_agent",     # retry with tooler
-        "coder_agent": "coder_agent",   # retry with coder
-        "planner": "planner_agent",     # success, next subtask
-        "user_verifier": "user_verifier",
-        "exit": END
+        "chatter_agent": "chatter_agent",   # retry chatter / re-route
+        "tooler_agent": "tooler_agent",     # retry with tooler / re-route
+        "coder_agent": "coder_agent",       # retry with coder / re-route / escalate
+        "user_verifier": "user_verifier",   # ask user for help
+        "planner": "planner_agent",         # success, next subtask
+        "exit": END                         # abort
     }
 )
 
@@ -138,13 +106,12 @@ graph.add_conditional_edges(
     "user_verifier",
     lambda state: state.get("user_verifier_decision", "abort"),
     {
-        "yes": "planner_agent",    # continue to next step
-        "no": "verifier_agent",      # tell verifier to retry
-        "abort": END               # stop the graph
+        "yes": "planner_agent",         # manual override - continue to next step
+        "no": "verifier_agent",         # manual override - needs further working
+        "abort": END                    # manual override - abort
     }
 )
 
-graph.add_edge("chat_agent", END)
 
 app = graph.compile()
 
@@ -174,18 +141,23 @@ def print_stream(stream):
 
 
 # -------------------------------- Main Loop (CLI) -----------------------------------------
-print("\n------------------------ Desktop Assistant ------------------------")
-while True:
-    print("\n----------------- User Request ------------------------")
-    user_input = input("\nEnter your request (or type 'exit' to quit): ")
-    print("\n-------------------------------------------------------")
-    if user_input.lower() in ["exit", "quit", "q"]:
-        print("Exiting Desktop Assistant.")
-        break
+def agent_main():
+    print("\n------------------------ Desktop Assistant ------------------------")
+    while True:
+        print("\n----------------- User Request ------------------------")
+        user_input = input("\nEnter your request (or type 'exit' to quit): ")
+        print("\n-------------------------------------------------------")
+        if user_input.lower() in ["exit", "quit", "q"]:
+            print("Exiting Desktop Assistant.")
+            break
 
-    # Wrap into the expected format
-    inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
-    
-    # Stream and print the agent’s response
-    print_stream(app.stream(inputs, stream_mode="values"))
+        # Wrap into the expected format
+        inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
+        
+        # Stream and print the agent’s response
+        print_stream(app.stream(inputs, stream_mode="values"))
+
+
+if __name__ == "__main__":
+    agent_main()
 
