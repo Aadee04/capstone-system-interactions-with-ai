@@ -7,15 +7,15 @@ from agents.agent_state import tools_list
 
 
 # -------------------------------------- Initial Setup ---------------------------------------
-from agents.agent_state import AgentState
+from app.agents.agent_state import AgentState
 
 # AGENT NODES 
-from agents.planner_agent import planner_agent, planner_decision
-from agents.chatter_agent import chat_agent
-from agents.tooler_agent import tooler_agent
-from agents.coder_agent import coder_agent
-from agents.verifier_agent import verifier_agent, verifier_routing
-from agents.user_verifier import user_verifier
+from app.agents.planner_agent import planner_agent, planner_decision
+from app.agents.chatter_agent import chat_agent
+from app.agents.tooler_agent import tooler_agent
+from app.agents.coder_agent import coder_agent
+from app.agents.verifier_agent import verifier_agent, verifier_routing
+from app.agents.user_verifier import user_verifier
 
 tool_node = ToolNode(tools=tools_list)
 

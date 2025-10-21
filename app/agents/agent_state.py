@@ -1,7 +1,7 @@
 from typing import Annotated, Sequence, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
-from agents.discover_app import discover_tools, discover_tools_descriptions
+from app.agents.discover_app import discover_tools, discover_tools_descriptions
 
 
 tools_list = discover_tools()

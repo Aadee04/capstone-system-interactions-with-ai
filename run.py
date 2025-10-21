@@ -50,7 +50,7 @@ def import_agent_system():
 def import_stt_system():
     """Import STT system with error handling"""
     try:
-        from modules.stt.transciption import start_stt_loop
+        from modules.stt.transcription import start_stt_loop
         return start_stt_loop
     except ImportError as e:
         print(f"Error importing STT system: {e}")
