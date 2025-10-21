@@ -1,16 +1,18 @@
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
-from agents.agent_state import AgentState
+from app.agents.agent_state import AgentState
 
 
 chatter_system_prompt = """
+You are a conversational agent that handles chat subtasks assigned by the planner.
 Absolutely never produce JSON, function calls, or text starting with "functs" or "functools". 
 Respond only in plain English messages. 
-If the input is empty, greet the user.
+Handle greetings, explanations, questions, and general conversation.
 Dont use any programming functions.
 Keep your response concise and end immediately after answering.
 Do not explain that you are following instructions.
-You must only respond to the last user message, rest of the conversation is context.
+You will receive a specific subtask to complete - focus on that subtask.
+If asked to explain something, provide clear and helpful explanations.
 
 Examples:
 "Hi there" → Hi! How can I assist you today?
@@ -26,14 +28,20 @@ Examples:
 
 chat_model = ChatOllama(model="freakycoder123/phi4-fc")
 def chat_agent(state: AgentState) -> AgentState:
-    print("[Chat Agent Invoked]")  # DEBUGGING ---------------
-
-    if not state["messages"][-1].content.strip():
-        response = AIMessage(content="Hi! How can I assist you today?")
-        return {"messages": [response]}  # Only return new message
+    print("[Chat Agent Invoked] Subtask:", state.get('current_subtask', 'No subtask'))  # DEBUGGING ---------------
     
-    system_as_human  = HumanMessage(content=(chatter_system_prompt))
-    response = chat_model.invoke([system_as_human ] + state["messages"])
+    current_subtask = state.get('current_subtask', '')
+    
+    # Only proceed if there's a subtask assigned by planner
+    if not current_subtask:
+        response = AIMessage(content="Hi! How can I assist you today?")
+        return {"messages": [response]}
+    
+    # Handle the specific subtask assigned by planner
+    system_as_human = HumanMessage(content=chatter_system_prompt)
+    task_message = HumanMessage(content=f"Subtask: {current_subtask}")
+    response = chat_model.invoke([system_as_human, task_message] + state["messages"])
+    
     clean_resp = response.content.strip().split("\n\n")[0] 
     
-    return {"messages": [AIMessage(content=clean_resp)]}  # Only return new message
+    return {"messages": [AIMessage(content=clean_resp)]}
