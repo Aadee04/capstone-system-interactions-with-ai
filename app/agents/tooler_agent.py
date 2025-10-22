@@ -1,51 +1,54 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama
 import json, re
-from agents.agent_state import AgentState
-from agents.agent_state import tools_list, tool_list_with_desc_str
+from app.agents.agent_state import AgentState
+from app.agents.agent_state import tools_list, tool_list_with_desc_str
 
-available_tools_str = "\n".join(
-    f"{name}: {desc}" 
-    for name, desc in tool_list_with_desc_str
-    if name != "run_python"
-)
+# available_tools_str = "\n".join(
+#     f"{name}: {desc}" 
+#     for name, desc in tool_list_with_desc_str
+#     if name != "run_python"
+# )
 
-print("Available tools for Tooler Agent:", available_tools_str)
+# print("Available tools for Tooler Agent:", available_tools_str)  # Debug only
 
-tooler_system_prompt = f"""You are a desktop tool executor. You are given one subtask to complete.
-Available tools: { available_tools_str }
+tooler_system_prompt = """You are a desktop tool executor. You are given one subtask to complete.
 
 CRITICAL:
 - Select the ONE most appropriate tool for the request
-- Call it exactly ONCE
 - Do not explain, do not add extra text
-- Just output the function call in JSON format
+- Just output the function call in proper output format
 - Use EXACT tool names and correct argument keys
-- Do Not Attempt to code or use "run_python"
-- If no tool can help, respond with {{"name": "no_op", "args": {{}}}}
+- If no tool can help, respond with {"name": "no_op", "args": {}}
+- If you have an empty subtask, respond with {"name": "no_op", "args": {}}
 
-You will be judged on whether the tool executed successfully for that subtask.
-Do NOT declare success/failure yourself - that's the verifier's job.
+OUTPUT FORMAT:
+[{"name": "<tool_name>", "args": {"<key>": <value>}}]
 
 Subtask: "Open Chrome and go to google.com"
-Response: {{"name": "open_browser", "args": {{"url": "https://www.google.com"}}}}
+Response: [{"name": "open_browser", "args": {"url": "https://www.google.com"}}]
 
 Subtask: "Launch the calculator"
-Response: {{"name": "open_app", "args": {{"app_name": "calculator"}}}}
+Response: [{"name": "open_app", "args": {"app_name": "calculator"}}]
 
 Subtask: "Get the current system time"
-Response: {{"name": "get_time", "args": {{}}}}
-"""
+Response: [{"name": "get_time", "args": {}}]
 
-tooler_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools_list if not t.name=="run_python"])
+Subtask: ""
+Response: [{"name": "no_op", "args": {}}]"""
+
+tooler_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools_list if t.name != "run_python"])
 def tooler_agent(state: AgentState) -> AgentState:
     print("[Tool Agent Invoked] Current Subtask:", state['current_subtask'])
+
+    if state.get('current_subtask', "") == "":
+        state["current_subtask"] = "No tools to be executed for current subtask"
 
     system_prompt = SystemMessage(content=tooler_system_prompt)
     response = tooler_model.invoke(
         [system_prompt] +
-        [HumanMessage(content=str(state['current_subtask']))] +
-        ([HumanMessage(content=state['user_context'])] if state['user_context'] else [])
+        [HumanMessage(content="Subtask: " + str(state['current_subtask']))] +
+        ([HumanMessage(content="User suggests: " + state.get('user_context', ''))] if state.get('user_context') else [])
     )
     
     print(f"[Tool Agent] Raw response content: {response.content}")
