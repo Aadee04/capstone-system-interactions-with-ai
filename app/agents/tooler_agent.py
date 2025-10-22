@@ -19,8 +19,8 @@ CRITICAL:
 - Do not explain, do not add extra text
 - Just output the function call in proper output format
 - Use EXACT tool names and correct argument keys
-- If no tool can help, respond with {"name": "no_op", "args": {}}
-- If you have an empty subtask, respond with {"name": "no_op", "args": {}}
+- If no tool can help, respond with [{"name": "no_op", "args": {}}]
+- If you have an empty subtask, respond with [{"name": "no_op", "args": {}}]
 
 OUTPUT FORMAT:
 [{"name": "<tool_name>", "args": {"<key>": <value>}}]
