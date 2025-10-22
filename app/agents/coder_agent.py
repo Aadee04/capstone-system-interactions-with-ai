@@ -1,8 +1,8 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama
 import json
-from agents.agent_state import AgentState
-from agents.agent_state import tools_list
+from app.agents.agent_state import AgentState
+from app.agents.agent_state import tools_list
 
 
 coder_system_prompt = """
