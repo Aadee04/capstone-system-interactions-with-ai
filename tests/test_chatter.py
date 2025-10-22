@@ -57,12 +57,24 @@ def test_chatter_morning_greeting():
     result = chat_agent(state)
     print(f"Result: {result}")
 
+def test_chatter_tool_usage():
+    """Test chat_agent() with a subtask requiring tools"""
+    print("\n5. Testing tool subtask:")
+    state = {
+        "messages": [HumanMessage(content="Hi, can you open word")],
+        "current_subtask": "Open Microsoft Word on default system startup location or current user profile depending upon previous usage patterns."
+    }
+    
+    result = chat_agent(state)
+    print(f"Result: {result}")
+
 if __name__ == "__main__":
     try:
         test_chatter_with_subtask()
         test_chatter_explanation_subtask()
         test_chatter_no_subtask()
         test_chatter_morning_greeting()
+        test_chatter_tool_usage()
         print("\n=== chat_agent() Tests Complete ===")
     except Exception as e:
         print(f"Error during testing: {e}")
