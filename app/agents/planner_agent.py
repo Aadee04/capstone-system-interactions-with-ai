@@ -365,6 +365,13 @@ def planner_agent(state: AgentState) -> AgentState:
             current_subtask = "Tell the user that you couldn't understand their request and ask them to rephrase it"
             tasks = [{"task": current_subtask, "executor": current_executor}]
     
+    # Handle single dict response (LLM returned single task without array wrapper)
+    elif isinstance(parsed, dict) and "task" in parsed and "executor" in parsed:
+        print("[Planner] Single task dict detected, converting to list format")
+        tasks = [parsed]  # Wrap in list
+        current_executor = parsed["executor"]
+        current_subtask = parsed["task"]
+    
     # Fallback for parsing failures or invalid format
     else:
         print("[Planner] Using fallback - ask for clarification")

@@ -27,6 +27,11 @@ def test_planner_conversational():
     result = planner_agent(state)
     print(f"Result: {result}")
 
+    if result.get('current_executor') == "chatter_agent":
+        return True
+    else:
+        return False
+
 def test_planner_action():
     """Test planner_agent() with action request"""
     print("\n2. Testing action request:")
@@ -41,6 +46,11 @@ def test_planner_action():
     result = planner_agent(state)
     print(f"\nResult: {result}")
 
+    if result.get('current_executor') == "tooler_agent":
+        return True
+    else:
+        return False
+
 def test_planner_coding():
     """Test planner_agent() with coding request"""
     print("\n3. Testing coding request:")
@@ -54,6 +64,11 @@ def test_planner_coding():
     
     result = planner_agent(state)
     print(f"Result: {result}")
+
+    if result.get('current_executor') == "coder_agent":
+        return True
+    else:
+        return False
 
 def test_planner_subtask_progression():
     """Test planner_agent() handling next subtask with new array format"""
@@ -72,6 +87,11 @@ def test_planner_subtask_progression():
     result = planner_agent(state)
     print(f"Result: {result}")
 
+    if result.get('current_executor') == "tooler_agent" and result.get('current_subtask') == "Open calculator":
+        return True
+    else:
+        return False
+
 def test_planner_completion():
     """Test planner_agent() task completion detection"""
     print("\n5. Testing task completion:")
@@ -88,6 +108,11 @@ def test_planner_completion():
     
     result = planner_agent(state)
     print(f"Result: {result}")
+
+    if result.get('current_executor') == "exit" and result.get('current_subtask') == "done":
+        return True
+    else:
+        return False
 
 def test_json_parsing():
     """Test the safe_json_parse function with new array format"""
@@ -108,6 +133,13 @@ def test_json_parsing():
     test3 = 'invalid json here'
     result3 = safe_json_parse(test3)
     print(f"Invalid JSON: {result3}")
+
+    # Return True if all tests produce expected results
+    return (
+        isinstance(result1, list) and len(result1) > 0 and
+        isinstance(result2, list) and len(result2) > 0 and
+        result3 == {}
+    )
 
 def test_planner_decision():
     """Test planner_decision function"""
@@ -136,23 +168,40 @@ def test_planner_decision():
             "expected": "exit"}
     ]
     
+    val = True
     for i, case in enumerate(test_cases, 1):
         state = case.copy()
         expected = state.pop("expected")
         result = planner_decision(state)
-        status = "✓" if result == expected else "✗"
+        if result == expected:
+            status = "✓" 
+        else:
+            val = False
+            status = "✗"
         print(f"  Test {i}: {status} {case} -> {result}")
+
+    return val
 
 if __name__ == "__main__":
     try:
-        test_planner_conversational()
-        test_planner_action()
-        test_planner_coding()
-        test_planner_subtask_progression()  # WORKS
-        test_planner_completion()
-        test_json_parsing()
-        test_planner_decision()
-        print("\n=== planner_agent() Tests Complete ===")
+        cases = [False for _ in range(7)]
+        cases[0] = test_planner_conversational()
+        cases[1] = test_planner_action()
+        cases[2] = test_planner_coding()
+        cases[3] = test_planner_subtask_progression()  # WORKS
+        cases[4] = test_planner_completion()
+        cases[5] = test_json_parsing()
+        cases[6] = test_planner_decision()
+        print("\n=== planner_agent() Tests Complete ===\n")
+
+        if not all(cases):
+            for idx, case in enumerate(cases):
+                if not case:
+                    print(f"Test {idx+1} failed")
+        else:
+            print("✓ All test cases passed")
+
+
     except Exception as e:
         print(f"Error during testing: {e}")
         import traceback
