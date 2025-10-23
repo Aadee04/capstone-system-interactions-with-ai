@@ -297,7 +297,9 @@ def planner_agent(state: AgentState) -> AgentState:
             return {
                 "current_executor": "exit",
                 "current_subtask": "done",
-                "subtask_index": subtask_index
+                "subtask_index": subtask_index,
+                'coder_tries': 0,
+                "tooler_tries": 0
             }
 
         current_task = tasks[subtask_index]
@@ -314,7 +316,9 @@ def planner_agent(state: AgentState) -> AgentState:
         return {
             "current_executor": current_executor,
             "current_subtask": current_subtask,
-            "subtask_index": subtask_index
+            "subtask_index": subtask_index,
+                'coder_tries': 0,
+                "tooler_tries": 0
         }
 
     # If it is the first run - do context-aware planning
@@ -382,7 +386,9 @@ def planner_agent(state: AgentState) -> AgentState:
     return {
         "current_executor": current_executor,
         "current_subtask": current_subtask,
-        "tasks": tasks
+        "tasks": tasks,
+        'coder_tries': 0,
+        "tooler_tries": 0
     }
 
 
@@ -400,4 +406,4 @@ def planner_decision(state: AgentState) -> str:
     elif current_executor == "coder_agent":
         return "coder_agent"
     else:
-        return "tooler_agent" # fallback
+        return "chatter_agent" # fallback

@@ -112,5 +112,6 @@ def coder_agent(state: AgentState) -> AgentState:
     
     return {
         "messages": [response],  # Only return new message
-        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or [])
+        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or []),
+        "coder_tries": state.get("coder_tries", 0) + 1
     }

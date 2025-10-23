@@ -94,5 +94,6 @@ def tooler_agent(state: AgentState) -> AgentState:
     
     return {
         "messages": [response],  # Only return new message
-        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or [])
+        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or []),
+        "tooler_tries": state.get("tooler_tries", 0) + 1
     }
