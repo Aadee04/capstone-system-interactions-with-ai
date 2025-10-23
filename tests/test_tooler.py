@@ -121,6 +121,7 @@ if __name__ == "__main__":
         test_tooler_with_context()
         test_tooler_with_empty_subtask()
         print("\n=== tooler_agent() Tests Complete ===")
+        print("\n\n=== Go Through the cases to see output ===")
     except Exception as e:
         print(f"Error during testing: {e}")
         import traceback

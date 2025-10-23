@@ -54,7 +54,6 @@ def tooler_agent(state: AgentState) -> AgentState:
     print(f"[Tool Agent] Raw response content: {response.content}")
     print(f"[Tool Agent] Has tool_calls attr: {hasattr(response, 'tool_calls')}")
     
-    
     tool_calls = getattr(response, "tool_calls", None)
     if not tool_calls or len(tool_calls) == 0:
         print("[Tool Agent] No tool_calls found, attempting to parse from content")

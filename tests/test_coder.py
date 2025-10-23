@@ -23,6 +23,21 @@ class Colors:
     RESET = '\033[0m'
     BOLD = '\033[1m'
 
+def format_result(state: AgentState):
+    print(f"\nmessages list = {state.get('messages')}")
+    print(f"\ntool_calls = {state.get('tool_calls')}")
+    
+    # Safe access with checks
+    tool_calls = state.get('tool_calls')
+    if tool_calls and len(tool_calls) > 0:
+        code = tool_calls[0].get('args', {}).get('code')
+        if code:
+            print(f"\nRaw Code:\n{code}")
+        else:
+            print("\nNo code found in tool_calls")
+    else:
+        print("\nNo tool_calls available")
+
 def test_coder_factorial():
     """Test coder_agent() with factorial calculation"""
     print("=== Testing coder_agent() function ===")
@@ -35,7 +50,9 @@ def test_coder_factorial():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 def test_coder_fibonacci():
     """Test coder_agent() with Fibonacci sequence"""
@@ -47,7 +64,9 @@ def test_coder_fibonacci():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 def test_coder_simple_math():
     """Test coder_agent() with simple math"""
@@ -59,7 +78,9 @@ def test_coder_simple_math():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 def test_coder_date_time():
     """Test coder_agent() with date/time operations"""
@@ -71,7 +92,9 @@ def test_coder_date_time():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 def test_coder_list_operations():
     """Test coder_agent() with list operations"""
@@ -83,7 +106,9 @@ def test_coder_list_operations():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 def test_coder_with_context():
     """Test coder_agent() with user context"""
@@ -95,7 +120,9 @@ def test_coder_with_context():
     }
     
     result = coder_agent(state)
-    print(f"Result: {result}")
+    print(f"Complete Result: {result}")
+    print("\nFormatted Results:")
+    format_result(result)
 
 if __name__ == "__main__":
     try:
@@ -106,7 +133,7 @@ if __name__ == "__main__":
         test_coder_list_operations()
         test_coder_with_context()
         print("\n=== coder_agent() Tests Complete ===")
-        print("\n\nGo Through the cases to see output")
+        print("\n\n=== Go Through the cases to see output ===")
     except Exception as e:
         print(f"Error during testing: {e}")
         import traceback
