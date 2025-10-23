@@ -20,6 +20,7 @@ class AgentState(TypedDict, total=False):
     coder_tries: int
     verifier_decision: str
     tool_calls: list[dict]
+    verifier_reason: str
 
 def create_initial_state() -> AgentState:
     return {
@@ -33,5 +34,6 @@ def create_initial_state() -> AgentState:
         "tooler_tries": 0,
         "coder_tries": 0,
         "verifier_decision": "",
-        "tool_calls": []
+        "tool_calls": [],
+        "verifier_reason": ""
     }
