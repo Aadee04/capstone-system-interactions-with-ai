@@ -1,112 +1,125 @@
-import textwrap
-from typing import Annotated, Sequence, TypedDict
-from langchain_core.messages import BaseMessage
-from langchain_core.messages import ToolMessage
-from langchain_core.messages import HumanMessage
-from langchain_community.llms import Ollama
-from IPython.display import Image, display
-from langchain_core.messages import SystemMessage
+
+from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from langchain_core.tools import tool
-from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-import os, importlib, inspect
+from agents.agent_state import tools_list
 
 
-def discover_tools():
-    tools = []
-    for file in os.listdir("app/tools"):
-        if file.endswith(".py") and file not in ["__init__.py"]:
-            name = file[:-3]
-            module = importlib.import_module(f"tools.{name}")
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
+# -------------------------------------- Initial Setup ---------------------------------------
+from app.agents.agent_state import AgentState
 
-                # Pick only callables that have `name` and `description` attributes
-                if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
-                    tools.append(attr)
-    return tools
+# AGENT NODES 
+from app.agents.planner_agent import planner_agent, planner_decision
+from app.agents.chatter_agent import chat_agent
+from app.agents.tooler_agent import tooler_agent
+from app.agents.coder_agent import coder_agent
+from app.agents.verifier_agent import verifier_agent, verifier_routing
+from app.agents.user_verifier import user_verifier
 
-tools = discover_tools()
+tool_node = ToolNode(tools=tools_list)
 
-tool_list_str = ", ".join([t.name for t in tools])
+# ------------------------------ Helper Functions for the graph ------------------------------
 
-class AgentState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage],add_messages]
-
-
-model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools(tools)
-def desktop_agent(state:AgentState)->AgentState:
-    system_prompt = SystemMessage(content=f"""
-You are a Desktop Assistant. Available tools: {tool_list_str}.
-
-Rules:
-1. If the user request matches a tool → call it only once.
-2. Once a tool returns a valid result, consider the subtask completed.
-3. For casual conversation (greetings, chit-chat, small talk, questions unrelated to tools) → call talk_to_user only.
-4. If no tool matches → generate minimal Python code and call run_python.
-5. Never repeat a tool call for the same user input.
-6. Respond with plain text only if explicitly asked.
-7. Return a valid summary of any tool's valid output.
-""")
-    response = model.invoke([system_prompt]+state['messages'])
-    return {"messages": state["messages"] + [response]}
-
-
-
-def should_continue(state: AgentState): 
-    messages = state["messages"]
-    last_message = messages[-1]
+# Helper function to execute tool and track completed tools
+def execute_tool_with_tracking(state: AgentState) -> AgentState:
+    print("[Execute Tool Invoked]")
     
-    # Track completed tools in state
-    completed = state.get("completed_tools", [])
-
-    # Check tool calls in last message
-    tool_calls = getattr(last_message, "tool_calls", []) or []
-    pending = [t for t in tool_calls if getattr(t, "name", None) not in completed]
-
-    if pending:
-        # mark tools as completed
-        for t in pending:
-            completed.append(getattr(t, "name", None))
-        state["completed_tools"] = completed
-        return "execute"
-    else:
-        return "exit"
-
-
-
-# TESTING CODE TO SAVE GENERATED TOOLS
-def generate_tool_node(code: str, tool_name: str):
-    """Save generated Python code into app/tools so it's reusable later."""
-    filename = f"app/tools/{tool_name}.py"
-    with open(filename, "w") as f:
-        f.write(textwrap.dedent(code))
-    print(f"New tool saved: {filename}")
+    # Invoke the tool node (handles tool execution + adding ToolMessages)
+    result = tool_node.invoke(state)
     
+    print(f"[Execute Tool] Tool execution complete")
+    print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
+    
+    # Track completed tools (from the last AI message’s tool_calls)
+    messages = result.get("messages", [])
+    ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
+    if ai_msg:
+        tool_calls = getattr(ai_msg, "tool_calls", []) or []
+        
+        completed = state.get("completed_tools", []).copy()
+        for tc in tool_calls:
+            tool_name = tc.get("name")
+            if tool_name and tool_name not in completed:
+                completed.append(tool_name)
+        
+        result["completed_tools"] = completed
+        print(f"[Execute Tool] Completed tools: {completed}")
+    
+    return result
+
+
+# ---------------------------------- Build the Agent App / Graph ------------------------------
 
 graph = StateGraph(AgentState)
-graph.add_node("desktop_agent",desktop_agent)
-tool_node = ToolNode(tools=tools)
-graph.add_node("execute_tool",tool_node)
 
-graph.set_entry_point("desktop_agent")
+# Nodes
+graph.add_node("planner_agent", planner_agent)
+graph.add_node("chatter_agent", chat_agent)
+graph.add_node("tooler_agent", tooler_agent)
+graph.add_node("coder_agent", coder_agent)
+graph.add_node("execute_tool", execute_tool_with_tracking)
+graph.add_node("verifier_agent", verifier_agent)
+graph.add_node("user_verifier", user_verifier)
 
+# Entry point - planner is now the entry point
+graph.set_entry_point("planner_agent")
 
+# Planner sends subtask to appropriate agent
 graph.add_conditional_edges(
-    "desktop_agent",
-    should_continue,
+    "planner_agent", planner_decision, 
     {
-        "execute":"execute_tool",
-        "exit":END
+        "chatter_agent": "chatter_agent",
+        "tooler_agent": "tooler_agent", 
+        "coder_agent": "coder_agent",
+        "exit": END
     }
 )
 
-graph.add_edge("execute_tool","desktop_agent")
+# Chatter goes directly to verifier (verify output)
+graph.add_edge("chatter_agent", "verifier_agent")
+
+# Tooler agent execution
+graph.add_edge("tooler_agent","execute_tool")
+
+# Coder agent execution
+graph.add_edge("coder_agent", "execute_tool")
+
+# Always verify after execution
+graph.add_edge("execute_tool", "verifier_agent")
+
+# Verifier decides next step
+graph.add_conditional_edges(
+    "verifier_agent",
+    verifier_routing,
+    {
+        "chatter_agent": "chatter_agent",   # retry chatter / re-route
+        "tooler_agent": "tooler_agent",     # retry with tooler / re-route
+        "coder_agent": "coder_agent",       # retry with coder / re-route / escalate
+        "user_verifier": "user_verifier",   # ask user for help
+        "planner": "planner_agent",         # success, next subtask
+        "exit": END                         # abort
+    }
+)
+
+graph.add_conditional_edges(
+    "user_verifier",
+    lambda state: state.get("user_verifier_decision", "abort"),
+    {
+        "yes": "planner_agent",         # manual override - continue to next step
+        "no": "verifier_agent",         # manual override - needs further working
+        "abort": END                    # manual override - abort
+    }
+)
+
 
 app = graph.compile()
 
+# Visualize the graph structure (optional)
+graph.visualize(filename="agent_graph.png")
+
+
+# ------------------------------- Run the Agent --------------------------------------------
 def print_stream(stream):
     for s in stream:
         message = s["messages"][-1]
@@ -118,7 +131,7 @@ def print_stream(stream):
                 args = call.get("arguments", {})
 
                 # Find the actual tool function
-                tool_func = next((t for t in tools if t.name == tool_name), None)
+                tool_func = next((t for t in tools_list if t.name == tool_name), None)
                 if tool_func:
                     result = tool_func(**args)
                     print(f"[Tool: {tool_name}] Output: {result}")
@@ -130,17 +143,24 @@ def print_stream(stream):
                 print(message)
 
 
+# -------------------------------- Main Loop (CLI) -----------------------------------------
+def agent_main():
+    print("\n------------------------ Desktop Assistant ------------------------")
+    while True:
+        print("\n----------------- User Request ------------------------")
+        user_input = input("\nEnter your request (or type 'exit' to quit): ")
+        print("\n-------------------------------------------------------")
+        if user_input.lower() in ["exit", "quit", "q"]:
+            print("Exiting Desktop Assistant.")
+            break
 
-# Main loop
-while True:
-    user_input = input("\nEnter your request (or type 'exit' to quit): ")
-    if user_input.lower() in ["exit", "quit", "q"]:
-        print("Exiting Desktop Assistant.")
-        break
+        # Wrap into the expected format
+        inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
+        
+        # Stream and print the agent’s response
+        print_stream(app.stream(inputs, stream_mode="values"))
 
-    # Wrap into the expected format
-    inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
-    
-    # Stream and print the agent’s response
-    print_stream(app.stream(inputs, stream_mode="values"))
+
+if __name__ == "__main__":
+    agent_main()
 

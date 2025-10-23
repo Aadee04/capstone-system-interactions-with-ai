@@ -1,3 +1,6 @@
 .venv/
 secrets.env
 __pycache__/
+WARP.md
+launch.json
+.vscode/

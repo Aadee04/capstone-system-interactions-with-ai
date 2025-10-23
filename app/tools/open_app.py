@@ -3,7 +3,7 @@ import os
 
 # -------------- Define allowed OS apps --------------
 ALLOWED_OS_ACTIONS = {
-    "calc": ["calc.exe"],            # Calculator
+    "calculator": ["calc.exe"],            # Calculator
     "word": [r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"],  # adjust path
     "notepad": ["notepad.exe"],
 }
@@ -25,5 +25,5 @@ def run_safe_os_command(app_name: str):
 
 @tool("open_app")
 def open_app(app_name: str = "") -> str:
-    """Safely open a desktop application if whitelisted."""
+    """Safely open a desktop application if whitelisted. Currently supports: calculator, word, notepad."""
     return run_safe_os_command(app_name)
