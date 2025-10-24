@@ -3,7 +3,7 @@ from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, Syst
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from app.agents.agent_state import tools_list
+from app.agents.agent_state import tools_list, create_initial_state
 
 
 # -------------------------------------- Initial Setup ---------------------------------------
@@ -160,8 +160,8 @@ def agent_main():
             print("Exiting Desktop Assistant.")
             break
 
-        # Wrap into the expected format
-        inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
+        inputs = create_initial_state()
+        inputs["messages"] = [HumanMessage(content=user_input)]
         
         # Stream and print the agent’s response
         print_stream(app.stream(inputs, stream_mode="values"))

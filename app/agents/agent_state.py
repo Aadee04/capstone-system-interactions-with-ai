@@ -30,7 +30,7 @@ class AgentState(TypedDict, total=False):
 
 def create_initial_state() -> AgentState:
     return {
-        "messages": [BaseMessage(content="")],
+        "messages": [],
         "route": "",
         "tasks": [],
         "subtask_index": 0,
