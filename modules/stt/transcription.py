@@ -9,6 +9,7 @@ import time
 import threading
 import os
 
+
 try:
     import speech_recognition as sr
 except ImportError:

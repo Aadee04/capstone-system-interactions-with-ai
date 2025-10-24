@@ -3,7 +3,7 @@ from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, Syst
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from agents.agent_state import tools_list
+from app.agents.agent_state import tools_list, create_initial_state
 
 
 # -------------------------------------- Initial Setup ---------------------------------------
@@ -115,8 +115,14 @@ graph.add_conditional_edges(
 
 app = graph.compile()
 
-# Visualize the graph structure (optional)
-graph.visualize(filename="agent_graph.png")
+# Optional visualization:
+try:
+    bytes_png = app.get_graph().draw_mermaid_png()
+    with open("agent_graph.png", "wb") as f:
+        f.write(bytes_png)
+    print("Graph diagram saved as agent_graph.png")
+except Exception as e:
+    print("Could not generate graph diagram:", e)
 
 
 # ------------------------------- Run the Agent --------------------------------------------
@@ -154,8 +160,8 @@ def agent_main():
             print("Exiting Desktop Assistant.")
             break
 
-        # Wrap into the expected format
-        inputs = {"messages": [HumanMessage(content=user_input)], "completed_tools": []}
+        inputs = create_initial_state()
+        inputs["messages"] = [HumanMessage(content=user_input)]
         
         # Stream and print the agent’s response
         print_stream(app.stream(inputs, stream_mode="values"))

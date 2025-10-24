@@ -16,26 +16,6 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv("config/secrets.env")
 
-# Add project root to path for imports
-project_root = Path(__file__).resolve().parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "app"))
-
-def setup_environment():
-    """Set up environment for proper module loading"""
-    # Ensure all necessary paths are available
-    paths_to_add = [
-        project_root,
-        project_root / "app",
-        project_root / "modules",
-        project_root / "modules" / "stt",
-        project_root / "modules" / "tts",
-    ]
-    
-    for path in paths_to_add:
-        if str(path) not in sys.path:
-            sys.path.insert(0, str(path))
-
 def import_agent_system():
     """Import agent system with error handling"""
     try:
@@ -79,7 +59,6 @@ class DesktopAssistant:
             enable_stt (bool): Enable speech-to-text
         """
         print("🤖 Desktop Assistant Starting...")
-        setup_environment()
         
         # Initialize components
         self.agent_app = None

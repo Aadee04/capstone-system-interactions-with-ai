@@ -10,21 +10,27 @@ tool_list_with_desc_str = discover_tools_descriptions()
 
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    route: str
+
     tasks: list[str]
     subtask_index: int
     current_subtask: str
     current_executor: str
-    user_context: str
+
     tooler_tries: int
     coder_tries: int
+
     verifier_decision: str
-    tool_calls: list[dict]
     verifier_reason: str
+
+    user_context: str
+
+    tool_calls: list[dict]
+    # tool_success: str
+    # tool_message: str
 
 def create_initial_state() -> AgentState:
     return {
-        "messages": [BaseMessage(content="")],
+        "messages": [],
         "route": "",
         "tasks": [],
         "subtask_index": 0,

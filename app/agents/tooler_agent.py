@@ -48,7 +48,9 @@ def tooler_agent(state: AgentState) -> AgentState:
     response = tooler_model.invoke(
         [system_prompt] +
         [HumanMessage(content="Subtask: " + str(state['current_subtask']))] +
-        ([HumanMessage(content="User suggests: " + state.get('user_context', ''))] if state.get('user_context') else [])
+        ([HumanMessage(content="User suggests: " + state.get('user_context', ''))] if state.get('user_context') else []) +
+        ([HumanMessage(content="Verifier said this for your last attempt: " + state.get("verifier_reason", ''))] if state.get('verifier_reason') else []) +
+        ([HumanMessage(content="Last tool call: " + str(state.get("tool_calls", '')[-1]) )] if state.get('verifier_reason') else [])
     )
     
     print(f"[Tool Agent] Raw response content: {response.content}")
