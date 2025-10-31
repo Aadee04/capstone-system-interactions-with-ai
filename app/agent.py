@@ -33,6 +33,16 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
     
     # Track completed tools (from the last AI message’s tool_calls)
     messages = result.get("messages", [])
+    print(f"[Execute Tool] Messages after execution: {len(messages)}")
+
+    # Print message contents for debugging
+    for i, m in enumerate(messages):
+        print(f"\n[Message {i}] Type: {type(m).__name__}")
+        if hasattr(m, "content"):
+            print(f"  Content: {m.content}")
+        if hasattr(m, "tool_calls"):
+            print(f"  Tool Calls: {m.tool_calls}")
+            
     ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
     if ai_msg:
         tool_calls = getattr(ai_msg, "tool_calls", []) or []
@@ -115,14 +125,14 @@ graph.add_conditional_edges(
 
 app = graph.compile()
 
-# Optional visualization:
-try:
-    bytes_png = app.get_graph().draw_mermaid_png()
-    with open("agent_graph.png", "wb") as f:
-        f.write(bytes_png)
-    print("Graph diagram saved as agent_graph.png")
-except Exception as e:
-    print("Could not generate graph diagram:", e)
+# # Optional visualization:
+# try:
+#     bytes_png = app.get_graph().draw_mermaid_png()
+#     with open("agent_graph.png", "wb") as f:
+#         f.write(bytes_png)
+#     print("Graph diagram saved as agent_graph.png")
+# except Exception as e:
+#     print("Could not generate graph diagram:", e)
 
 
 # ------------------------------- Run the Agent --------------------------------------------
@@ -156,7 +166,7 @@ def agent_main():
         print("\n----------------- User Request ------------------------")
         user_input = input("\nEnter your request (or type 'exit' to quit): ")
         print("\n-------------------------------------------------------")
-        if user_input.lower() in ["exit", "quit", "q"]:
+        if user_input.lower() in ["exit", "quit", "clear", "q"]:
             print("Exiting Desktop Assistant.")
             break
 

@@ -214,9 +214,9 @@ def verifier_agent(state: AgentState) -> AgentState:
     
     # Update retry counters
     return {
-        "verifier_decision": decision,
+        "verifier_decision": decision ,
         "subtask_index": subtask_index + 1 if decision == "success" else subtask_index,
-        "verifier_reason": reason
+        "verifier_reason": reason if decision != "escalate" else ""
     }
     
 

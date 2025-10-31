@@ -1,30 +1,32 @@
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
-import json, re
-from app.agents.agent_state import AgentState
-from app.agents.agent_state import tools_list, tool_list_with_desc_str
+from pydantic import BaseModel, Field
+import json, re, numpy as np
+from sentence_transformers import SentenceTransformer
+from app.agents.agent_state import AgentState, tools_list
 
-# available_tools_str = "\n".join(
-#     f"{name}: {desc}" 
-#     for name, desc in tool_list_with_desc_str
-#     if name != "run_python"
-# )
 
-# print("Available tools for Tooler Agent:", available_tools_str)  # Debug only
+# =================== CONFIG ===================
+k = 5
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-tooler_system_prompt = """You are a desktop tool executor in a LangGraph system. You are given one subtask to complete.
+tool_embeddings = np.load("data/embeddings/tool_embeddings.npy")
+with open("data/embeddings/tool_texts.txt", "r", encoding="utf-8") as f:
+    tool_texts = [line.strip() for line in f]
+
+tooler_system_prompt = """You are a desktop tool executor. You are given one subtask to complete.
 
 CRITICAL:
-- Select the ONE most appropriate tool for the request, the tools can control hardware and software on the local machine.
-- Do not explain, do not add extra text
-- Just output the function call in proper output format
-- Use EXACT tool names and correct argument keys
-- If no tool can help, respond with [{"name": "no_op", "args": {}}]
-- If you have an empty subtask, respond with [{"name": "no_op", "args": {}}]
+- Select ONE most appropriate tool for the request FROM YOUR GIVEN TOOLS.
+- Output ONLY in valid JSON format.
+- Use EXACT tool names and correct argument keys.
+- If no tool applies, return [{"name": "no_op", "args": {}}].
+- No explanations, text, or reasoning.
 
 OUTPUT FORMAT:
 [{"name": "<tool_name>", "args": {"<key>": <value>}}]
 
+# Examples:
 Subtask: "Open Chrome and go to google.com"
 Response: [{"name": "open_browser", "args": {"url": "https://www.google.com"}}]
 
@@ -35,67 +37,102 @@ Subtask: "Get the current system time"
 Response: [{"name": "get_time", "args": {}}]
 
 Subtask: ""
-Response: [{"name": "no_op", "args": {}}]"""
+Response: [{"name": "no_op", "args": {}}]
 
-tooler_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools_list if t.name != "run_python"])
+Always recheck your function names to make sure they exactly match the available tools, and use proper args.
+"""
+
+
+# =================== SCHEMA ===================
+class ToolCall(BaseModel):
+    name: str = Field(..., description="Tool name")
+    args: dict = Field(default_factory=dict, description="Arguments for the tool")
+
+
+# =================== HELPERS ===================
+def get_top_tools(subtask: str, top_k: int = 10):
+    query_emb = embedder.encode([subtask], normalize_embeddings=True)
+    sims = np.dot(tool_embeddings, query_emb.T).squeeze()
+    top_idx = np.argsort(sims)[::-1][:top_k]
+    return [tool_texts[i] for i in top_idx]
+
+
+def parse_tool_response_fallback(content: str):
+    try:
+        cleaned = re.sub(r"^```(?:json)?|```$", "", content.strip(), flags=re.MULTILINE).strip()
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            parsed = [parsed]
+        if not isinstance(parsed, list):
+            return [{"name": "no_op", "args": {}}]
+        return parsed
+    except Exception:
+        return [{"name": "no_op", "args": {}}]
+
+
+# =================== MODEL ===================
+tooler_model = ChatOllama(model="freakycoder123/phi4-fc")
+
+
+# =================== MAIN AGENT ===================
 def tooler_agent(state: AgentState) -> AgentState:
-    print("[Tool Agent Invoked] Current Subtask:", state['current_subtask'])
+    print("[Tool Agent Invoked] Current Subtask:", state.get("current_subtask", ""))
 
-    if state.get('current_subtask', "") == "":
-        state["current_subtask"] = "No tools to be executed for current subtask"
+    subtask = state.get("current_subtask", "").strip() or "No tools to be executed"
+    top_tools = get_top_tools(subtask, top_k=k)
+    top_tool_text = "\n".join(top_tools)
 
     system_prompt = SystemMessage(content=tooler_system_prompt)
-    response = tooler_model.invoke(
-        [system_prompt] +
-        [HumanMessage(content="Subtask: " + str(state['current_subtask']))] +
-        ([HumanMessage(content="User suggests: " + state.get('user_context', ''))] if state.get('user_context') else []) +
-        ([HumanMessage(content="Verifier said this for your last attempt: " + state.get("verifier_reason", ''))] if state.get('verifier_reason') else []) +
-        ([HumanMessage(content="Last tool call: " + str(state.get("tool_calls", '')[-1]) )] if state.get('verifier_reason') else [])
+    human_msgs = [HumanMessage(content=f"Subtask: {subtask}")]
+
+    if ctx := state.get("user_context"):
+        human_msgs.append(HumanMessage(content=f"User suggested previously: {ctx}"))
+
+    if reason := state.get("verifier_reason"):
+        human_msgs.append(HumanMessage(content=f"Verifier said: {reason}"))
+
+    if tcalls := state.get("tool_calls"):
+        if len(tcalls) > 0:
+            human_msgs.append(HumanMessage(content=f"Last tool call: {str(tcalls[-1])}"))
+
+    human_msgs.append(
+        HumanMessage(content=f"System suggests these {k} tools for the current subtask:\n{top_tool_text}")
     )
-    
-    print(f"[Tool Agent] Raw response content: {response.content}")
-    print(f"[Tool Agent] Has tool_calls attr: {hasattr(response, 'tool_calls')}")
-    
-    tool_calls = getattr(response, "tool_calls", None)
-    if not tool_calls or len(tool_calls) == 0:
-        print("[Tool Agent] No tool_calls found, attempting to parse from content")
-        try:
-            content = response.content.strip()
-            # Strip markdown code blocks
-            content = re.sub(r"^```(?:json)?|```$", "", content, flags=re.MULTILINE).strip()
-            
-            # Try to parse as JSON
-            parsed = None
-            if content.startswith("["):
-                # Direct list format: [{"name": "tool", "arguments": {...}}]
-                parsed = json.loads(content)
-            elif content.startswith("{"):
-                # Could be {"functools": [...]} or direct object
-                parsed_obj = json.loads(content)
-                if "functools" in parsed_obj:
-                    parsed = parsed_obj["functools"]
-                elif "name" in parsed_obj:
-                    parsed = [parsed_obj]
-            
-            if parsed and isinstance(parsed, list):
-                # Normalize the format
-                tool_calls = []
-                for idx, item in enumerate(parsed):
-                    if isinstance(item, dict) and "name" in item:
-                        tool_calls.append({
-                            "name": item["name"],
-                            "args": item.get("arguments", item.get("args", {})),
-                            "id": f"call_{idx}"
-                        })
-                
-                if tool_calls:
-                    response.tool_calls = tool_calls
-                    print(f"[Tool Agent] Converted to tool_calls: {tool_calls}")
-        except Exception as e:
-            print(f"[Tool Agent] Could not parse tool calls: {e}")
-    
+
+    messages = [system_prompt] + human_msgs
+
+    print(f"[Tool Agent] Final system prompt:\n{messages}")
+
+    # Try structured output first
+    structured_model = tooler_model.with_structured_output(list[ToolCall])
+    try:
+        tool_calls = structured_model.invoke(messages)
+        print("[Tool Agent] Structured output success:", tool_calls)
+    except Exception as e:
+        print(f"[Tool Agent] Structured output failed, fallback parse: {e}")
+        raw_resp = tooler_model.invoke(messages)
+        print(f"[Tool Agent] Raw response content: {raw_resp.content}")
+        tool_calls = parse_tool_response_fallback(raw_resp.content)
+
+    # Normalize to consistent schema
+    normalized = [
+        {"name": t.name if isinstance(t, ToolCall) else t.get("name", "no_op"),
+         "args": t.args if isinstance(t, ToolCall) else t.get("args", {})}
+        for t in tool_calls
+    ]
+
+    ai_message = AIMessage(
+        content="Tool calls ready",
+        tool_calls=[
+            {"name": t["name"], "args": t["args"], "id": f"call_{i}"}
+            for i, t in enumerate(normalized)
+        ]
+    )
+
+    print(f"[Tool Agent] Final tool calls: {normalized}")
+
     return {
-        "messages": [response],  # Only return new message
-        "tool_calls": state.get("tool_calls", []) + (response.tool_calls or []),
+        "messages": ai_message,
+        "tool_calls": state.get("tool_calls", []) + normalized,
         "tooler_tries": state.get("tooler_tries", 0) + 1
     }

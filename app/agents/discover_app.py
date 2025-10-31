@@ -27,6 +27,14 @@ def discover_tools_descriptions():
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
-                    tools_list.append((attr.name, attr.description))
+                    desc = attr.description.strip().split("\n")
+                    tools_list.append((attr.name, desc))
     return tools_list
 
+
+
+if __name__ == "__main__":
+    print("Discover tools: ", discover_tools_descriptions())
+    print("Total tools discovered: ", len(discover_tools()))
+    print("-----")
+    print("Tools with descriptions:", discover_tools_descriptions())

@@ -1,6 +1,6 @@
 # app/tools/__init__.py
 
-from .open_app import open_app
+# from .open_app import open_app
 from .get_time import get_time
 from .search_wikipedia import search_wikipedia
 from .run_python import run_python

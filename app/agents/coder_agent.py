@@ -62,16 +62,35 @@ coder_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in 
 
 def coder_agent(state: AgentState) -> AgentState:
     print("[Coder Agent Invoked] Subtask:", state['current_subtask'])
-
-    system_prompt = SystemMessage(content=coder_system_prompt)
-    response = coder_model.invoke(
-        [system_prompt] +
-        [HumanMessage(content="Subtask: " + str(state['current_subtask']))] +
-        ([HumanMessage(content="User suggests: " + state.get('user_context', ''))] if state.get('user_context') else []) +
-        ([HumanMessage(content="Verifier said this for your last attempt: " + state.get("verifier_reason", ''))] if state.get('verifier_reason') else []) +
-        ([HumanMessage(content="Last tool call: " + str(state.get("tool_calls", '')[-1]) )] if state.get('verifier_reason') else [])
-    )
     
+    system_prompt = SystemMessage(content=coder_system_prompt)
+
+    subtask_msg = HumanMessage(content="Subtask: " + str(state['current_subtask']))
+
+    user_context_msg = (
+        [HumanMessage(content="User suggests: " + state.get('user_context', ''))]
+        if state.get('user_context') else []
+    )
+
+    verifier_reason_msg = (
+        [HumanMessage(content="Verifier said this for your last attempt: " + state.get("verifier_reason", ''))]
+        if state.get('verifier_reason') else []
+    )
+
+    last_tool_call = ""
+    if state.get("tool_calls") and len(state["tool_calls"]) > 0:
+        last_tool_call = str(state["tool_calls"][-1])
+
+    last_tool_call_msg = (
+        [HumanMessage(content="Last tool call: " + last_tool_call)]
+        if state.get('verifier_reason') else []
+    )
+
+    messages = [system_prompt, subtask_msg] + user_context_msg + verifier_reason_msg + last_tool_call_msg
+    print(f"[Coder Agent] Final message:\n{messages}")
+
+    response = coder_model.invoke(messages)
+
     print(f"[Coder Agent] Raw response content: {response.content}")
     
     tool_calls = getattr(response, "tool_calls", None)
