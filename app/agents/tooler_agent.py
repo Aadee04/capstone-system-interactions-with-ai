@@ -12,10 +12,10 @@ from app.agents.agent_state import tools_list, tool_list_with_desc_str
 
 # print("Available tools for Tooler Agent:", available_tools_str)  # Debug only
 
-tooler_system_prompt = """You are a desktop tool executor. You are given one subtask to complete.
+tooler_system_prompt = """You are a desktop tool executor in a LangGraph system. You are given one subtask to complete.
 
 CRITICAL:
-- Select the ONE most appropriate tool for the request
+- Select the ONE most appropriate tool for the request, the tools can control hardware and software on the local machine.
 - Do not explain, do not add extra text
 - Just output the function call in proper output format
 - Use EXACT tool names and correct argument keys

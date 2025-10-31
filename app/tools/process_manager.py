@@ -14,6 +14,7 @@ import signal
 from langchain.tools import tool
 
 
+@tool
 def list_running_apps(include_system: bool = False, sort_by: str = "name") -> Dict[str, Any]:
     """
     List all running applications
@@ -87,6 +88,7 @@ def list_running_apps(include_system: bool = False, sort_by: str = "name") -> Di
         }
 
 
+@tool
 def get_process_info(process_identifier: str) -> Dict[str, Any]:
     """
     Get detailed information about a specific process
@@ -171,6 +173,7 @@ def get_process_info(process_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def close_application(app_name: str, force: bool = False) -> Dict[str, Any]:
     """
     Close an application gracefully or forcefully
@@ -278,6 +281,7 @@ def close_application(app_name: str, force: bool = False) -> Dict[str, Any]:
         }
 
 
+@tool
 def get_system_resources() -> Dict[str, Any]:
     """
     Get current system resource usage
@@ -353,6 +357,7 @@ def get_system_resources() -> Dict[str, Any]:
         }
 
 
+@tool
 def set_process_priority(process_identifier: str, priority: str) -> Dict[str, Any]:
     """
     Set the priority of a process
@@ -439,6 +444,7 @@ def set_process_priority(process_identifier: str, priority: str) -> Dict[str, An
         }
 
 
+@tool
 def launch_application(app_path: str, arguments: List[str] = None, working_dir: str = None) -> Dict[str, Any]:
     """
     Launch an application

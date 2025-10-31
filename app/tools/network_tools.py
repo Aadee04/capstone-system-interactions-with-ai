@@ -16,6 +16,7 @@ import re
 from langchain.tools import tool
 
 
+@tool
 def get_network_status() -> Dict[str, Any]:
     """
     Get comprehensive network status information
@@ -103,6 +104,7 @@ def get_network_status() -> Dict[str, Any]:
         }
 
 
+@tool
 def ping_host(hostname: str, count: int = 4, timeout: int = 5) -> Dict[str, Any]:
     """
     Ping a host to test connectivity
@@ -191,6 +193,7 @@ def ping_host(hostname: str, count: int = 4, timeout: int = 5) -> Dict[str, Any]
         }
 
 
+@tool
 def get_wifi_networks() -> Dict[str, Any]:
     """
     Get available WiFi networks
@@ -278,6 +281,7 @@ def get_wifi_networks() -> Dict[str, Any]:
         }
 
 
+@tool
 def connect_to_wifi(ssid: str, password: str = None) -> Dict[str, Any]:
     """
     Connect to a WiFi network
@@ -396,6 +400,7 @@ def connect_to_wifi(ssid: str, password: str = None) -> Dict[str, Any]:
         }
 
 
+@tool
 def disconnect_wifi() -> Dict[str, Any]:
     """
     Disconnect from current WiFi network
@@ -426,6 +431,7 @@ def disconnect_wifi() -> Dict[str, Any]:
         }
 
 
+@tool
 def get_network_usage() -> Dict[str, Any]:
     """
     Get network usage statistics
@@ -476,6 +482,7 @@ def get_network_usage() -> Dict[str, Any]:
         }
 
 
+@tool
 def test_internet_speed() -> Dict[str, Any]:
     """
     Test internet connection speed (basic test)
@@ -522,6 +529,7 @@ def test_internet_speed() -> Dict[str, Any]:
         }
 
 
+@tool
 def send_notification(title: str, message: str, duration: int = 5) -> Dict[str, Any]:
     """
     Send a Windows notification

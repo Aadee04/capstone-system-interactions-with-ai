@@ -123,6 +123,7 @@ def create_folder(path: str, parents: bool = True) -> Dict[str, Any]:
         }
 
 
+@tool
 def delete_file_or_folder(path: str, force: bool = False) -> Dict[str, Any]:
     """
     Delete a file or folder
@@ -203,6 +204,7 @@ def delete_file_or_folder(path: str, force: bool = False) -> Dict[str, Any]:
         }
 
 
+@tool
 def move_file_or_folder(source: str, destination: str, overwrite: bool = False) -> Dict[str, Any]:
     """
     Move a file or folder to a new location
@@ -272,6 +274,7 @@ def move_file_or_folder(source: str, destination: str, overwrite: bool = False) 
         }
 
 
+@tool
 def copy_file_or_folder(source: str, destination: str, overwrite: bool = False) -> Dict[str, Any]:
     """
     Copy a file or folder to a new location
@@ -347,6 +350,7 @@ def copy_file_or_folder(source: str, destination: str, overwrite: bool = False) 
         }
 
 
+@tool
 def find_files(search_term: str, location: str = None, file_type: str = None, max_results: int = 50) -> Dict[str, Any]:
     """
     Search for files matching a pattern
@@ -426,6 +430,7 @@ def find_files(search_term: str, location: str = None, file_type: str = None, ma
         }
 
 
+@tool
 def get_file_info(path: str) -> Dict[str, Any]:
     """
     Get detailed information about a file or folder
@@ -505,6 +510,7 @@ def get_file_info(path: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def list_directory(path: str = None, show_hidden: bool = False, sort_by: str = "name") -> Dict[str, Any]:
     """
     List contents of a directory

@@ -55,7 +55,7 @@ def shutdown_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
                 "message": message,
                 "error": f"Shutdown command failed: {result.stderr.strip()}"
             }
-            
+              
     except Exception as e:
         return {
             "success": False,

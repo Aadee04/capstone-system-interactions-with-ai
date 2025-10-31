@@ -78,6 +78,7 @@ class ClipboardHistory:
 _clipboard_history = ClipboardHistory()
 
 
+@tool
 def get_clipboard_content() -> Dict[str, Any]:
     """
     Get current clipboard content
@@ -140,7 +141,7 @@ def get_clipboard_content() -> Dict[str, Any]:
             "error": f"Error getting clipboard content: {str(e)}"
         }
 
-
+@tool
 def set_clipboard_content(content: str) -> Dict[str, Any]:
     """
     Set clipboard content
@@ -183,6 +184,7 @@ def set_clipboard_content(content: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def get_clipboard_history(limit: int = 10) -> Dict[str, Any]:
     """
     Get clipboard history
@@ -230,6 +232,7 @@ def get_clipboard_history(limit: int = 10) -> Dict[str, Any]:
         }
 
 
+@tool
 def restore_clipboard_item(index: int) -> Dict[str, Any]:
     """
     Restore a clipboard item from history
@@ -284,6 +287,7 @@ def restore_clipboard_item(index: int) -> Dict[str, Any]:
         }
 
 
+@tool
 def clear_clipboard_history() -> Dict[str, Any]:
     """
     Clear clipboard history
@@ -309,6 +313,7 @@ def clear_clipboard_history() -> Dict[str, Any]:
         }
 
 
+@tool
 def copy_text_from_screen() -> Dict[str, Any]:
     """
     Simulate Ctrl+C to copy selected text
@@ -368,6 +373,7 @@ def copy_text_from_screen() -> Dict[str, Any]:
         }
 
 
+@tool
 def paste_text_to_screen() -> Dict[str, Any]:
     """
     Simulate Ctrl+V to paste clipboard content
@@ -413,6 +419,7 @@ def paste_text_to_screen() -> Dict[str, Any]:
         }
 
 
+@tool
 def type_text(text: str, delay: float = 0.01) -> Dict[str, Any]:
     """
     Type text character by character

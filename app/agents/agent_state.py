@@ -23,6 +23,7 @@ class AgentState(TypedDict, total=False):
     verifier_reason: str
 
     user_context: str
+    resolved_query: str 
 
     tool_calls: list[dict]
     # tool_success: str
@@ -37,6 +38,7 @@ def create_initial_state() -> AgentState:
         "current_subtask": "",
         "current_executor": "",
         "user_context": "",
+        "resolved_query": "",
         "tooler_tries": 0,
         "coder_tries": 0,
         "verifier_decision": "",

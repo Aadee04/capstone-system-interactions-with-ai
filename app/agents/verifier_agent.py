@@ -32,28 +32,25 @@ OUTPUT FORMAT: <choice> - <reason>
 
 Examples:
 
-Example 1:
 Subtask: Respond to greeting and introduce yourself
 Last Executor: chatter_agent
 User says: "Hi, how are you?"
 Here are the last five system messages for context:
 Human: Hi, how are you?
 AI: Hello! I'm doing well, thank you for asking. How can I assist you today?
-→ success - The chatter_agent gave a friendly and appropriate response.
+Output: success - The chatter_agent gave a friendly and appropriate response.
 
 ---
 
-Example 2:
 Subtask: Respond to greeting and introduce yourself
 Last Executor: chatter_agent
 Here are the last five system messages for context:
 Human: Hello there
 AI: ...
-→ retry - The chatter_agent response was irrelevant or unhelpful.
+Output: retry - The chatter_agent response was irrelevant or unhelpful.
 
 ---
 
-Example 3:
 Subtask: Open calculator
 Last Executor: tooler_agent
 Tooler executor attempt count: 0
@@ -61,11 +58,10 @@ Here are the last five system messages for context:
 Human: Open calculator
 AI: I'll open the calculator for you. (Tool call: open_app)
 Tool: Calculator opened successfully
-→ success - The tooler_agent executed correctly.
+Output: success - The tooler_agent executed correctly.
 
 ---
 
-Example 4:
 Subtask: Open calculator
 Last Executor: tooler_agent
 Tooler executor attempt count: 1
@@ -73,11 +69,10 @@ Here are the last five system messages for context:
 Human: Open calculator
 AIMessage(content='[{"name": "open_app", "args": {"url": "https://www.google.com"}}]', additional_kwargs={}, response_metadata={'model': 'freakycoder123/phi4-fc', 'created_at': '2025-10-23T17:06:37.8116301Z', 'done': True, 'done_reason': 'stop', 'total_duration': 653465200, 'load_duration': 291070800, 'prompt_eval_count': 1955, 'prompt_eval_duration': 11169500, 'eval_count': 23, 'eval_duration': 319511100, 'model_name': 'freakycoder123/phi4-fc'}, id='run--842ecb3e-5762-4436-bb2b-ff96073dd248-0', tool_calls=[{'name': 'open_app', 'args': {'url': 'https://www.google.com'}, 'id': 'call_0'}], usage_metadata={'input_tokens': 1955, 'output_tokens': 23, 'total_tokens': 1978})], 'tool_calls': [{'name': 'open_browser', 'args': {'url': 'https://www.google.com'}, 'id': 'call_0'}]
 Tool: Error: Application not found
-→ retry - The tooler_agent did not try to open the correct application. Only failed once; allow retry.
+Output: retry - The tooler_agent did not try to open the correct application. Only failed once; allow retry.
 
 ---
 
-Example 5:
 Subtask: Open calculator
 Last Executor: tooler_agent
 Tooler executor attempt count: 2
@@ -85,11 +80,10 @@ Here are the last five system messages for context:
 Human: Open calculator
 AI: I'll open the calculator for you. (Tool call: open_app)
 Tool: Error: Application not found
-→ escalate - tooler_agent failed multiple times; escalate to coder_agent.
+Output: escalate - tooler_agent failed multiple times; escalate to coder_agent.
 
 ---
 
-Example 6:
 Subtask: Calculate 5 * 3
 Last Executor: tooler_agent
 Tooler executor attempt count: 1
@@ -97,11 +91,10 @@ Here are the last five system messages for context:
 Human: Calculate 5*3
 AI: I'll use a tool to calculate that. (Tool call: open_app)
 Tool: Failed to compute
-→ escalate - tooler_agent cannot perform mathematical computation; escalate to coder_agent.
+Output: escalate - tooler_agent cannot perform mathematical computation; escalate to coder_agent.
 
 ---
 
-Example 7:
 Subtask: Calculate 5 * 3
 Last Executor: coder_agent
 Coder executor attempt count: 0
@@ -109,11 +102,10 @@ Here are the last five system messages for context:
 Human: Calculate 5*3
 AI: I'll calculate that for you. (Tool call: run_python)
 Tool: 15
-→ success - Code executed correctly.
+Output: success - Code executed correctly.
 
 ---
 
-Example 8:
 Subtask: Calculate factorial of 5
 Last Executor: tooler_agent
 Tooler executor attempt count: 2
@@ -121,18 +113,17 @@ Here are the last five system messages for context:
 Human: Calculate factorial of 5
 AI: I'll try to use a tool for this.
 Tool: No appropriate tool available
-→ escalate - No tool available for computation; escalate to coder_agent.
+Output: escalate - No tool available for computation; escalate to coder_agent.
 
 ---
 
-Example 9:
 Subtask: Calculate factorial of 5
 Last Executor: coder_agent
 Coder executor attempt count: 1
 Here are the last five system messages for context:
 Human: Calculate factorial of 5
 AIMessage(content='{\n  "name": "run_python",\n  "arguments": {\n    "code": "def factorial(n):\\n    if n == 0 or n == 1:\\n        return 10\\n    else:\\n        return n * factorial(n-1)\\n\\nresult = factorial(5)\\nprint(result)"\n  }\n}', additional_kwargs={}, response_metadata={'model': 'freakycoder123/phi4-fc', 'created_at': '2025-10-23T17:03:18.3096038Z', 'done': True, 'done_reason': 'stop', 'total_duration': 1772507900, 'load_duration': 311003900, 'prompt_eval_count': 671, 'prompt_eval_duration': 475115400, 'eval_count': 72, 'eval_duration': 968406800, 'model_name': 'freakycoder123/phi4-fc'}, id='run--9eba2d75-2114-4697-80f5-c76b8b9b2e14-0', tool_calls=[{'name': 'run_python', 'args': {'code': 'def factorial(n):\n    if n == 0 or n == 1:\n        return 10\n    else:\n        return n * factorial(n-1)\n\nresult = factorial(5)\nprint(result)'}, 'id': 'call_0'}]
-→ retry - coder_agent did not provide proper code for the stopping condition n == 0 or n == 1.
+Output: retry - coder_agent did not provide proper code for the stopping condition n == 0 or n == 1.
 
 
 """

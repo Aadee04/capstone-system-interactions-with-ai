@@ -493,7 +493,7 @@ def get_media_info(file_path: str) -> Dict[str, Any]:
 def capture_webcam_photo(save_path: str = None, camera_index: int = 0) -> Dict[str, Any]:
     """
     Capture a photo of the user.
-    Capture a photo from webcam.
+    Capture a photo from the physical webcam.
     
     Args:
         save_path (str): Path to save photo (auto-generated if None)
