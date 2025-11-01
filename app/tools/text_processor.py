@@ -14,6 +14,7 @@ import json
 from langchain.tools import tool
 
 
+@tool
 def read_text_from_file(file_path: str, encoding: str = None, max_size_mb: int = 10) -> Dict[str, Any]:
     """
     Read text content from a file
@@ -114,6 +115,7 @@ def read_text_from_file(file_path: str, encoding: str = None, max_size_mb: int =
         }
 
 
+@tool
 def write_text_to_file(file_path: str, content: str, encoding: str = 'utf-8', 
                       mode: str = 'w', create_dirs: bool = True) -> Dict[str, Any]:
     """
@@ -182,6 +184,7 @@ def write_text_to_file(file_path: str, content: str, encoding: str = 'utf-8',
         }
 
 
+@tool
 def search_in_file(file_path: str, search_term: str, case_sensitive: bool = False,
                   use_regex: bool = False, max_matches: int = 100) -> Dict[str, Any]:
     """
@@ -306,6 +309,7 @@ def search_in_file(file_path: str, search_term: str, case_sensitive: bool = Fals
         }
 
 
+@tool
 def extract_text_from_image(image_path: str, language: str = 'eng') -> Dict[str, Any]:
     """
     Extract text from an image using OCR
@@ -427,6 +431,7 @@ def extract_text_from_image(image_path: str, language: str = 'eng') -> Dict[str,
         }
 
 
+@tool
 def translate_text(text: str, target_language: str, source_language: str = 'auto') -> Dict[str, Any]:
     """
     Translate text to another language

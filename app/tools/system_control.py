@@ -16,6 +16,7 @@ import win32con
 from langchain.tools import tool
 
 
+@tool
 def shutdown_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
     """
     Shutdown the system
@@ -55,7 +56,7 @@ def shutdown_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
                 "message": message,
                 "error": f"Shutdown command failed: {result.stderr.strip()}"
             }
-            
+              
     except Exception as e:
         return {
             "success": False,
@@ -65,6 +66,7 @@ def shutdown_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
         }
 
 
+@tool
 def restart_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
     """
     Restart the system
@@ -114,6 +116,7 @@ def restart_system(delay: int = 0, message: str = None) -> Dict[str, Any]:
         }
 
 
+@tool
 def cancel_shutdown() -> Dict[str, Any]:
     """
     Cancel a scheduled shutdown or restart
@@ -149,6 +152,7 @@ def cancel_shutdown() -> Dict[str, Any]:
         }
 
 
+@tool
 def lock_screen() -> Dict[str, Any]:
     """
     Lock the screen
@@ -174,6 +178,7 @@ def lock_screen() -> Dict[str, Any]:
         }
 
 
+@tool("sleep_system")
 def sleep_system() -> Dict[str, Any]:
     """
     Put the system to sleep
@@ -199,58 +204,41 @@ def sleep_system() -> Dict[str, Any]:
             "error": f"Error putting system to sleep: {str(e)}"
         }
 
+from datetime import datetime
+from typing import Dict, Any
+from langchain.tools import tool
 
+@tool
 def get_volume_level() -> Dict[str, Any]:
-    """
-    Get the current system volume level
-    
-    Returns:
-        Dict: Volume information
-    """
+    """Get the current system volume level."""
     try:
         from pycaw.pycaw import AudioUtilities, AudioEndpointVolume
         from comtypes import CLSCTX_ALL
-        
-        # Get the default audio device
+
         devices = AudioUtilities.GetSpeakers()
         interface = devices.Activate(AudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume = AudioEndpointVolume(interface)
-        
-        # Get volume level (0.0 to 1.0)
-        current_volume = volume.GetMasterVolumeLevel()
+
         volume_percent = int(volume.GetMasterVolumeLevelScalar() * 100)
-        is_muted = volume.GetMute()
-        
+        is_muted = bool(volume.GetMute())
+
         return {
             "success": True,
             "volume_percent": volume_percent,
-            "volume_level": current_volume,
-            "is_muted": bool(is_muted),
+            "is_muted": is_muted,
             "timestamp": datetime.now().isoformat(),
-            "message": f"Current volume: {volume_percent}%" + (" (muted)" if is_muted else "")
+            "message": f"Current volume: {volume_percent}%{' (muted)' if is_muted else ''}"
         }
-        
+
     except ImportError:
-        # Fallback method using Windows API
-        try:
-            import win32api
-            import win32con
-            
-            # This is a simplified approach - actual implementation would be more complex
-            return {
-                "success": True,
-                "volume_percent": "Unknown",
-                "volume_level": "Unknown", 
-                "is_muted": False,
-                "timestamp": datetime.now().isoformat(),
-                "message": "Volume level retrieved (limited information - install pycaw for full functionality)"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error getting volume level: {str(e)}"
-            }
-    
+        return {
+            "success": True,
+            "volume_percent": "Unknown",
+            "is_muted": False,
+            "timestamp": datetime.now().isoformat(),
+            "message": "Install pycaw for full functionality."
+        }
+
     except Exception as e:
         return {
             "success": False,
@@ -258,6 +246,7 @@ def get_volume_level() -> Dict[str, Any]:
         }
 
 
+@tool
 def set_volume_level(level: int) -> Dict[str, Any]:
     """
     Set the system volume level
@@ -326,6 +315,7 @@ def set_volume_level(level: int) -> Dict[str, Any]:
         }
 
 
+@tool("mute_unmute_volume_audio")
 def mute_system(mute: bool = True) -> Dict[str, Any]:
     """
     Mute or unmute the system
@@ -391,6 +381,7 @@ def mute_system(mute: bool = True) -> Dict[str, Any]:
         }
 
 
+@tool
 def get_system_info() -> Dict[str, Any]:
     """
     Get basic system information
@@ -439,6 +430,7 @@ def get_system_info() -> Dict[str, Any]:
         }
 
 
+@tool
 def run_command_as_admin(command: str) -> Dict[str, Any]:
     """
     Run a command with administrator privileges

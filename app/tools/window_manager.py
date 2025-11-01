@@ -14,6 +14,7 @@ import time
 from langchain.tools import tool
 
 
+@tool
 def list_windows(visible_only: bool = True, sort_by: str = "title") -> Dict[str, Any]:
     """
     List all windows
@@ -106,6 +107,7 @@ def list_windows(visible_only: bool = True, sort_by: str = "title") -> Dict[str,
         }
 
 
+@tool
 def find_window(window_identifier: str) -> Dict[str, Any]:
     """
     Find a window by title or process name
@@ -154,6 +156,7 @@ def find_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def focus_window(window_identifier: str) -> Dict[str, Any]:
     """
     Bring a window to the foreground and focus it
@@ -197,6 +200,7 @@ def focus_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def minimize_window(window_identifier: str) -> Dict[str, Any]:
     """
     Minimize a window
@@ -235,6 +239,7 @@ def minimize_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def maximize_window(window_identifier: str) -> Dict[str, Any]:
     """
     Maximize a window
@@ -273,6 +278,7 @@ def maximize_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def restore_window(window_identifier: str) -> Dict[str, Any]:
     """
     Restore a window to its normal size
@@ -311,6 +317,7 @@ def restore_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def resize_window(window_identifier: str, width: int, height: int) -> Dict[str, Any]:
     """
     Resize a window to specific dimensions
@@ -360,6 +367,7 @@ def resize_window(window_identifier: str, width: int, height: int) -> Dict[str, 
         }
 
 
+@tool
 def move_window(window_identifier: str, x: int, y: int) -> Dict[str, Any]:
     """
     Move a window to a specific position
@@ -410,6 +418,7 @@ def move_window(window_identifier: str, x: int, y: int) -> Dict[str, Any]:
         }
 
 
+@tool
 def close_window(window_identifier: str) -> Dict[str, Any]:
     """
     Close a window (sends WM_CLOSE message)
@@ -462,6 +471,7 @@ def close_window(window_identifier: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def arrange_windows(arrangement: str) -> Dict[str, Any]:
     """
     Arrange windows using Windows built-in arrangements
@@ -528,6 +538,7 @@ def arrange_windows(arrangement: str) -> Dict[str, Any]:
         }
 
 
+@tool
 def get_window_info(window_identifier: str) -> Dict[str, Any]:
     """
     Get detailed information about a specific window

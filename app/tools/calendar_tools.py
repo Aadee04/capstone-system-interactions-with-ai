@@ -277,6 +277,8 @@ def get_events(start_date: str = None, end_date: str = None,
         }
 
 
+
+@tool
 def update_event(event_id: str, **updates) -> Dict[str, Any]:
     """
     Update an existing event

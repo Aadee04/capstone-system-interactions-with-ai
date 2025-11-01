@@ -27,23 +27,6 @@ class TestContextIntegration(unittest.TestCase):
             "tool_calls": []
         }
     
-    def test_context_modules_import(self):
-        """Test that all context modules can be imported"""
-        try:
-            from modules.context.system_state_tracker import get_state_tracker
-            from modules.context.context_manager import get_context_manager
-            from modules.context.smart_query_resolver import get_smart_resolver
-            from modules.session.session_manager import get_session_manager
-            from modules.shortcuts.smart_shortcuts import get_shortcuts_manager
-            from modules.suggestions.proactive_suggestions import get_suggestion_engine
-            from modules.visual.visual_verifier import get_visual_verifier
-            
-            print("✓ All context modules imported successfully")
-            return True
-            
-        except ImportError as e:
-            print(f"✗ Module import failed: {e}")
-            return False
     
     def test_planner_context_awareness(self):
         """Test enhanced planner with context-aware features"""

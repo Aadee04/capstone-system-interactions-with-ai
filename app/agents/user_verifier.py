@@ -30,6 +30,7 @@ def user_verifier(state: AgentState) -> AgentState:
     return {
         "user_context": context,
         "messages": [user_msg, decision_msg],  # Only return new messages
-        "user_verifier_decision": user_reply
+        "user_verifier_decision": user_reply,
+        "subtask_index": state.get("subtask_index", 0) + 1 if user_reply == "yes" else state.get("subtask_index", 0)
         }
 
