@@ -174,7 +174,7 @@ def agent_main():
         inputs["messages"] = [HumanMessage(content=user_input)]
         
         # Stream and print the agent’s response
-        print_stream(app.stream(inputs, stream_mode="values"))
+        print_stream(app.stream(inputs, stream_mode="values", config={"recursion_limit": 200}))
 
 
 if __name__ == "__main__":

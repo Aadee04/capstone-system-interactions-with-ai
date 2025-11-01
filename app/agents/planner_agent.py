@@ -170,6 +170,7 @@ planner_model = ChatOllama(model="freakycoder123/phi4-fc")
 def planner_agent(state: AgentState) -> AgentState:
     print("[Enhanced Planner Agent Invoked]")  # DEBUGGING ---------------
 
+
     if state["subtask_index"] != 0: # Not the first run, just return current subtask
         subtask_index = state["subtask_index"]
         tasks = state.get("tasks", [])
@@ -206,6 +207,22 @@ def planner_agent(state: AgentState) -> AgentState:
     
     # If it's the first run, generate tasks from user input
     user_message = state["messages"][-1].content if state.get("messages") else ""
+
+    
+    if user_message == "":
+      print("[Planner] Empty user message, using fallback")
+      current_executor = "chatter_agent"
+      current_subtask = "Greet the user and ask them to provide a valid request"
+      tasks = [{"task": current_subtask, "executor": current_executor}]
+
+      return {
+          "current_executor": current_executor,
+          "current_subtask": current_subtask,
+          "tasks": tasks,
+          'coder_tries': 0,
+          "tooler_tries": 0
+      }
+    
     full_prompt = planner_system_prompt + "\nUser Request: " + user_message
     final_system_prompt = HumanMessage(content=full_prompt)
 

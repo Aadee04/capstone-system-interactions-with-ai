@@ -17,7 +17,9 @@ Reply with EXACTLY ONE of these words:
 - "failure" (impossible to complete)
 - "escalate" (retry with coder if tool missing or calculations needed)
 
-ONE WORD ONLY. With Only 1 line of explanation in reasons, Do not explain my instructions to me.
+ONE WORD ONLY. With Only 1 line of explanation in reasons.
+Do not explain my instructions to me. 
+You only have roughly 30 words for your output
 
 Escalation Guidelines:
 - Chatter response inappropriate/unhelpful → "retry"
@@ -128,7 +130,9 @@ Output: retry - coder_agent did not provide proper code for the stopping conditi
 
 """
 
-verifier_model = ChatOllama(model="freakycoder123/phi4-fc").bind_tools([t for t in tools_list if t.name=="run_python"])
+verifier_model = ChatOllama(
+    model="freakycoder123/phi4-fc",
+    num_predict=50).bind_tools([t for t in tools_list if t.name=="run_python"])
 def verifier_agent(state: AgentState) -> AgentState:
     print("[Verifier Agent Invoked] Subtask:", state.get("current_subtask", ""))
 

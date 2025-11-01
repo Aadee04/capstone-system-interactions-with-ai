@@ -15,7 +15,6 @@ def discover_tools():
                     tools.append(attr)
     
     print(f"Discovered {len(tools)} tools: {[tool.name for tool in tools]}\n")
-
     return tools
 
 def discover_tools_descriptions():

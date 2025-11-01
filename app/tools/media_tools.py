@@ -305,7 +305,7 @@ def play_media_file(file_path: str, fullscreen: bool = False, volume: int = None
         }
 
 @tool
-def control_media(action: str, application: str = None) -> Dict[str, Any]:
+def control_media_playback(action: str, application: str = None) -> Dict[str, Any]:
     """
     Control media playback (play, pause, stop, next, previous)
     

@@ -1,6 +1,7 @@
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
+from typing import List
 import json, re, numpy as np
 from sentence_transformers import SentenceTransformer
 from app.agents.agent_state import AgentState, tools_list
@@ -47,6 +48,9 @@ Always recheck your function names to make sure they exactly match the available
 class ToolCall(BaseModel):
     name: str = Field(..., description="Tool name")
     args: dict = Field(default_factory=dict, description="Arguments for the tool")
+
+class ToolCallList(RootModel[List[ToolCall]]):
+    pass
 
 
 # =================== HELPERS ===================
@@ -104,9 +108,10 @@ def tooler_agent(state: AgentState) -> AgentState:
     print(f"[Tool Agent] Final system prompt:\n{messages}")
 
     # Try structured output first
-    structured_model = tooler_model.with_structured_output(list[ToolCall])
+    structured_model = tooler_model.with_structured_output(ToolCallList)
     try:
-        tool_calls = structured_model.invoke(messages)
+        parsed = structured_model.invoke(messages)
+        tool_calls = parsed.__root__
         print("[Tool Agent] Structured output success:", tool_calls)
     except Exception as e:
         print(f"[Tool Agent] Structured output failed, fallback parse: {e}")
