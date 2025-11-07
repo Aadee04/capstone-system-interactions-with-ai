@@ -48,11 +48,11 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
     serialized_messages = serialize_messages(messages)
 
     # Safely append a tracking message
-    result["external_messages"].append({
-        "agent": "Execute Tool",
-        "message": serialized_messages,
-        "type": "info"
-    })
+    result["external_messages"] = [{
+    "agent": "Execute Tool",
+    "message": serialized_messages,
+    "type": "info"
+}]
 
     # Debug: print tool calls if present
     ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
@@ -122,21 +122,22 @@ graph.add_conditional_edges(
 )
 
 def user_verifier_routing(state: AgentState) -> str:
-    """Route after user_verifier - if awaiting decision, interrupt to END"""
-    if state.get("awaiting_user_verification"):
-        return "interrupt"
+    """Route after user_verifier based on resumed input"""
+    # Get decision from resumed command
+    if isinstance(state.get("__command__"), dict):
+        decision = state["__command__"].get("decision", "abort")
+    else:
+        decision = "abort"
     
-    decision = state.get("user_verifier_decision", "abort")
     return decision
 
 graph.add_conditional_edges(
     "user_verifier",
     user_verifier_routing,
     {
-        "yes": "verifier_agent",         # manual override - continue to next step
-        "no": "verifier_agent",          # manual override - needs further working
-        "abort": END,                    # manual override - abort
-        "interrupt": END                 # NEW: pause for user input
+        "yes": "verifier_agent",      # Continue to next planning step
+        "no": "verifier_agent",      # Back to verification
+        "abort": END
     }
 )
 

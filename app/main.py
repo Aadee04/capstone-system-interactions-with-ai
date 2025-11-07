@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agent import app as agent_app, create_initial_state
 from app.modules.embeddings.embeddings_generator import generate_tool_embeddings
 from langchain_core.messages import HumanMessage, AIMessage
+from langgraph.types import Command
 import threading, uvicorn, time, json
 from pydantic import BaseModel 
 import json
@@ -111,93 +112,65 @@ async def continue_agent(request: ContinueRequest):
     if not thread_id:
         return JSONResponse({"error": "Missing thread_id"}, status_code=400)
 
-    if decision not in {"yes", "no", "abort"}:
-        print(f"[Continue] Invalid decision '{decision}', defaulting to 'abort'")
-        decision = "abort"
-
     config = {
         "configurable": {
             "thread_id": thread_id
         }
     }
 
-    print(f"[Continue] Resuming thread_id={thread_id} with decision='{decision}'")
-
     try:
-        # Get current state from checkpoint
-        current_state = agent_app.get_state(config)
-        
-        if not current_state or not current_state.values:
-            return JSONResponse({"error": "Thread not found or expired"}, status_code=404)
+        # Create resume command with user's decision
+        resume_command = Command(
+            resume={
+                "decision": decision,
+                "context": context
+            }
+        )
 
-        print(f"[Continue] Retrieved checkpoint at node: {current_state.next}")
-        
-        # Update state with user decision
-        updated_values = current_state.values.copy()
-        updated_values["awaiting_user_verification"] = False
-        updated_values["user_verifier_decision"] = decision
-        updated_values["user_context"] = context
-        
-        # Clear external_messages to avoid duplication
-        if "external_messages" in updated_values:
-            updated_values["external_messages"] = []
-        
-        # Add decision messages to conversation
-        if "messages" not in updated_values:
-            updated_values["messages"] = []
-        
-        updated_values["messages"].extend([
-            AIMessage(content="User verification completed."),
-            HumanMessage(content=f"User decision: {decision}, context: {context}")
-        ])
+        async def event_stream():
+            try:
+                # Resume from checkpoint with user's input
+                async for step in agent_app.astream(
+                    resume_command,  # Pass command instead of None
+                    config=config
+                ):
+                    print("[Continue stream step]:", step.keys())
 
-        # Update checkpoint with new state
-        agent_app.update_state(config, updated_values)
-        print(f"[Continue] Updated checkpoint with decision")
+                    # Aggregate external messages (global + nested)
+                    external_msgs = []
+                    if "external_messages" in step:
+                        external_msgs.extend(step["external_messages"])
+                    else:
+                        for node_name, node_state in step.items():
+                            if isinstance(node_state, dict) and "external_messages" in node_state:
+                                external_msgs.extend(node_state["external_messages"])
+
+                    # Send external messages to frontend
+                    for msg in external_msgs:
+                        print("[Continue sending external message]:", msg)
+                        yield f"data: {json.dumps(msg)}\n\n"
+
+                    # Check if it pauses again for verification
+                    awaiting_flag = False
+                    for node_name, node_state in step.items():
+                        if isinstance(node_state, dict) and node_state.get("awaiting_user_verification"):
+                            awaiting_flag = True
+                            break
+
+                    if awaiting_flag:
+                        print(f"[Continue] Paused again for verification, thread_id={thread_id}")
+                        yield f"data: {json.dumps({'status': 'awaiting_user', 'thread_id': thread_id})}\n\n"
+                        break
+
+            except Exception as e:
+                print("[Continue stream error]:", e)
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     except Exception as e:
         print(f"[Continue] Error retrieving/updating state: {e}")
         return JSONResponse({"error": f"Failed to resume: {str(e)}"}, status_code=500)
-
-    async def event_stream():
-        try:
-            # Resume from checkpoint (pass None as state to continue from checkpoint)
-            async for step in agent_app.astream(None, config):
-                print("[Continue stream step]:", step.keys())
-
-                # Aggregate external messages (global + nested)
-                external_msgs = []
-                if "external_messages" in step:
-                    external_msgs.extend(step["external_messages"])
-                else:
-                    for node_name, node_state in step.items():
-                        if isinstance(node_state, dict) and "external_messages" in node_state:
-                            external_msgs.extend(node_state["external_messages"])
-
-                # Send external messages to frontend
-                for msg in external_msgs:
-                    print("[Continue sending external message]:", msg)
-                    yield f"data: {json.dumps(msg)}\n\n"
-
-                # Check if it pauses again for verification
-                awaiting_flag = False
-                for node_name, node_state in step.items():
-                    if isinstance(node_state, dict) and node_state.get("awaiting_user_verification"):
-                        awaiting_flag = True
-                        break
-
-                if awaiting_flag:
-                    print(f"[Continue] Paused again for verification, thread_id={thread_id}")
-                    yield f"data: {json.dumps({'status': 'awaiting_user', 'thread_id': thread_id})}\n\n"
-                    break
-
-        except Exception as e:
-            print("[Continue stream error]:", e)
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-
 
 @app.get("/startup")
 def run_embeddings():
