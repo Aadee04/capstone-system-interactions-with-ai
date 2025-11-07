@@ -28,33 +28,24 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
     # Invoke the tool node (handles tool execution + adding ToolMessages)
     result = tool_node.invoke(state)
     
-    print(f"[Execute Tool] Tool execution complete")
+    # print(f"[Execute Tool] Tool execution complete")
     print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
     
     # Track completed tools (from the last AI message’s tool_calls)
     messages = result.get("messages", [])
-    print(f"[Execute Tool] Messages after execution: {len(messages)}")
 
     # Print message contents for debugging
-    for i, m in enumerate(messages):
-        print(f"\n[Message {i}] Type: {type(m).__name__}")
-        if hasattr(m, "content"):
-            print(f"  Content: {m.content}")
-        if hasattr(m, "tool_calls"):
-            print(f"  Tool Calls: {m.tool_calls}")
+    # for i, m in enumerate(messages):
+    #     print(f"\n[Message {i}] Type: {type(m).__name__}")
+    #     if hasattr(m, "content"):
+    #         print(f"  Content: {m.content}")
+    #     if hasattr(m, "tool_calls"):
+    #         print(f"  Tool Calls: {m.tool_calls}")
             
     ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
     if ai_msg:
         tool_calls = getattr(ai_msg, "tool_calls", []) or []
-        
-        completed = state.get("completed_tools", []).copy()
-        for tc in tool_calls:
-            tool_name = tc.get("name")
-            if tool_name and tool_name not in completed:
-                completed.append(tool_name)
-        
-        result["completed_tools"] = completed
-        print(f"[Execute Tool] Completed tools: {completed}")
+        print(f"[Execute Tool] Just executed: {[tc.get('name') for tc in tool_calls]}")
     
     return result
 
@@ -137,26 +128,36 @@ app = graph.compile()
 
 # ------------------------------- Run the Agent --------------------------------------------
 def print_stream(stream):
+    printed_ids = set()  # track messages already printed
+    
     for s in stream:
-        message = s["messages"][-1]
+        messages = s.get("messages", [])
+        if not messages:
+            continue
         
-        # If the message is a dict with 'functs' key (LangGraph tool call JSON)
-        if isinstance(message, dict) and "functs" in message:
-            for call in message["functs"]:
-                tool_name = call.get("name")
-                args = call.get("arguments", {})
+        # print only messages that are new
+        for msg in messages:
+            msg_id = getattr(msg, "id", id(msg))  # fallback to object id
+            if msg_id in printed_ids:
+                continue
+            
+            printed_ids.add(msg_id)
 
-                # Find the actual tool function
-                tool_func = next((t for t in tools_list if t.name == tool_name), None)
-                if tool_func:
-                    result = tool_func(**args)
-                    print(f"[Tool: {tool_name}] Output: {result}")
-        else:
-            # Normal message
-            if hasattr(message, "pretty_print"):
-                message.pretty_print()
+            # handle LangGraph tool call dicts
+            if isinstance(msg, dict) and "functs" in msg:
+                for call in msg["functs"]:
+                    tool_name = call.get("name")
+                    args = call.get("arguments", {})
+                    tool_func = next((t for t in tools_list if t.name == tool_name), None)
+                    if tool_func:
+                        result = tool_func(**args)
+                        print(f"[Tool: {tool_name}] Output: {result}")
+            
+            # normal LangChain or BaseMessage
+            elif hasattr(msg, "pretty_print"):
+                msg.pretty_print()
             else:
-                print(message)
+                print(msg)
 
 
 # -------------------------------- Main Loop (CLI) -----------------------------------------

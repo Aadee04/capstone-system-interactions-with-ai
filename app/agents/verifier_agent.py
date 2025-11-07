@@ -48,8 +48,17 @@ Subtask: Respond to greeting and introduce yourself
 Last Executor: chatter_agent
 Here are the last five system messages for context:
 Human: Hello there
-AI: ...
+AI: I'm sorry, but there seems to be some confusion in the request you're asking me about audio output of apps or handling software functionalities which I'm unable to assist with.
 Output: retry - The chatter_agent response was irrelevant or unhelpful.
+
+---
+
+Subtask: Mute system volume
+Last Executor: chatter_agent
+Here are the last five system messages for context:
+Human: Mute audio
+AI: 
+Output: escalate - The chatter_agent cannot execute tools; use coder_agent instead.
 
 ---
 
@@ -189,7 +198,7 @@ def verifier_agent(state: AgentState) -> AgentState:
     response = verifier_model.invoke(messages)
     raw_text = getattr(response, "content", "") or ""
     raw_text = raw_text.strip()
-    print(f"[Verifier] Raw Response: {raw_text}")
+    # print(f"[Verifier] Raw Response: {raw_text}")
 
     if not raw_text:
         print("[Verifier] Empty model response, defaulting to 'user_verifier'")
@@ -199,13 +208,12 @@ def verifier_agent(state: AgentState) -> AgentState:
         # Split only once on '-' to separate reason
         parts = raw_text.split("-", 1)
         decision_text = parts[0].strip().lower()
-        print(f"[Verifier] Raw Decision: {decision_text}")
+
+        decision = next((d for d in VALID_DECISIONS if d in decision_text), "user_verifier")
+        print(f"[Verifier] Decision: {decision}")
+
         reason = parts[1].strip().split("\n\n")[0] if len(parts) > 1 else ""
         print(f"[Verifier] Reason: {reason}")
-
-    # --- Parse valid decision, default to user verifier ---
-    decision = next((d for d in VALID_DECISIONS if d in decision_text), "user_verifier")
-    print(f"[Verifier] Parsed decision: {decision}")
 
     # Apply retry limits and escalation logic
     if decision == "retry":

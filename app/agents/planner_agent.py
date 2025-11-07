@@ -228,7 +228,7 @@ def planner_agent(state: AgentState) -> AgentState:
 
     # Generate LLM Response
     response = planner_model.invoke([final_system_prompt])
-    print(f"[Planner] Raw response: {response.content}")  # DEBUGGING ---------------
+    # print(f"[Planner] Raw response: {response.content}")  # DEBUGGING ---------------
 
     # Parse Response if in json format
     try:
@@ -236,7 +236,7 @@ def planner_agent(state: AgentState) -> AgentState:
     except Exception:
         parsed = None  # Will be handled by fallback below
     
-    print(f"[Planner parsed]: {parsed}")  # DEBUGGING ---------------
+    print(f"[Planner Tasks]: {parsed}")  # DEBUGGING ---------------
     
     # Handle successful parsing (should be array format)
     if isinstance(parsed, list) and parsed:

@@ -87,15 +87,15 @@ def coder_agent(state: AgentState) -> AgentState:
     )
 
     messages = [system_prompt, subtask_msg] + user_context_msg + verifier_reason_msg + last_tool_call_msg
-    print(f"[Coder Agent] Final message:\n{messages}")
+    # print(f"[Coder Agent] Final message:\n{messages}")
 
     response = coder_model.invoke(messages)
 
-    print(f"[Coder Agent] Raw response content: {response.content}")
+    # print(f"[Coder Agent] Raw response content: {response.content}")
     
     tool_calls = getattr(response, "tool_calls", None)
     if not tool_calls or len(tool_calls) == 0:
-        print("[Coder Agent] No tool_calls found, attempting to parse from content")
+        # print("[Coder Agent] No tool_calls found, attempting to parse from content")
         try:
             content = response.content.strip()
 
@@ -129,7 +129,7 @@ def coder_agent(state: AgentState) -> AgentState:
                     response.tool_calls = tool_calls
                     print(f"[Coder Agent] Converted to tool_calls: {tool_calls}")
         except Exception as e:
-            print(f"[Coder Agent] Could not parse tool calls: {e}")
+            print(f"[Coder Agent] Error with tool calls: {e}")
     
     return {
         "messages": [response],  # Only return new message

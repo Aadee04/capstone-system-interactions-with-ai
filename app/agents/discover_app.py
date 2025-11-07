@@ -14,7 +14,7 @@ def discover_tools():
                 if callable(attr) and hasattr(attr, "name") and hasattr(attr, "description"):
                     tools.append(attr)
     
-    print(f"Discovered {len(tools)} tools: {[tool.name for tool in tools]}\n")
+    # print(f"Discovered {len(tools)} tools: {[tool.name for tool in tools]}\n")
     return tools
 
 def discover_tools_descriptions():

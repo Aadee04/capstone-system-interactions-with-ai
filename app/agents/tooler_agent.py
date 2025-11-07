@@ -11,10 +11,6 @@ from app.agents.agent_state import AgentState, tools_list
 k = 5
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-tool_embeddings = np.load("data/embeddings/tool_embeddings.npy")
-with open("data/embeddings/tool_texts.txt", "r", encoding="utf-8") as f:
-    tool_texts = [line.strip() for line in f]
-
 tooler_system_prompt = """You are a desktop tool executor. You are given one subtask to complete.
 
 CRITICAL:
@@ -55,9 +51,15 @@ class ToolCallList(RootModel[List[ToolCall]]):
 
 # =================== HELPERS ===================
 def get_top_tools(subtask: str, top_k: int = 10):
+    tool_embeddings = np.load("data/embeddings/tool_embeddings.npy")
+    
     query_emb = embedder.encode([subtask], normalize_embeddings=True)
     sims = np.dot(tool_embeddings, query_emb.T).squeeze()
     top_idx = np.argsort(sims)[::-1][:top_k]
+
+    with open("data/embeddings/tool_texts.txt", "r", encoding="utf-8") as f:
+        tool_texts = [line.strip() for line in f]
+
     return [tool_texts[i] for i in top_idx]
 
 
@@ -105,18 +107,18 @@ def tooler_agent(state: AgentState) -> AgentState:
 
     messages = [system_prompt] + human_msgs
 
-    print(f"[Tool Agent] Final system prompt:\n{messages}")
+    # print(f"[Tool Agent] Final system prompt:\n{messages}")
 
     # Try structured output first
     structured_model = tooler_model.with_structured_output(ToolCallList)
     try:
         parsed = structured_model.invoke(messages)
         tool_calls = parsed.__root__
-        print("[Tool Agent] Structured output success:", tool_calls)
+        # print("[Tool Agent] Structured output success:", tool_calls)
     except Exception as e:
-        print(f"[Tool Agent] Structured output failed, fallback parse: {e}")
+        # print(f"[Tool Agent] Structured output failed, fallback parse: {e}")
         raw_resp = tooler_model.invoke(messages)
-        print(f"[Tool Agent] Raw response content: {raw_resp.content}")
+        # print(f"[Tool Agent] Raw response content: {raw_resp.content}")
         tool_calls = parse_tool_response_fallback(raw_resp.content)
 
     # Normalize to consistent schema
@@ -134,7 +136,7 @@ def tooler_agent(state: AgentState) -> AgentState:
         ]
     )
 
-    print(f"[Tool Agent] Final tool calls: {normalized}")
+    # print(f"[Tool Agent] Final tool calls: {normalized}")
 
     return {
         "messages": ai_message,
