@@ -166,7 +166,7 @@ def safe_json_parse(content: str):
         return {}
 
 
-planner_model = ChatOllama(model="freakycoder123/phi4-fc")
+planner_model = ChatOllama(model="freakycoder123/phi4-fc", num_predict=350)
 def planner_agent(state: AgentState) -> AgentState:
     print("[Enhanced Planner Agent Invoked]")  # DEBUGGING ---------------
 
@@ -177,6 +177,12 @@ def planner_agent(state: AgentState) -> AgentState:
 
         # Check if all tasks completed (index >= length)
         if subtask_index >= len(tasks):
+            
+            state["external_messages"].append({
+                "agent": "Planner Agent", 
+                "message": "All subtasks completed.",
+                "type": "info"              
+            })
             return {
                 "current_executor": "exit",
                 "current_subtask": "done",
@@ -196,12 +202,18 @@ def planner_agent(state: AgentState) -> AgentState:
             current_subtask = str(current_task)
             current_executor = "tooler_agent"
 
+        state["external_messages"].append({
+            "agent": "Planner Agent", 
+            "message": f"Subtask {subtask_index}: {current_subtask} assigned to {current_executor}",
+            "type": "info"              
+        })
+
         return {
             "current_executor": current_executor,
             "current_subtask": current_subtask,
             "subtask_index": subtask_index,
-                'coder_tries': 0,
-                "tooler_tries": 0
+            'coder_tries': 0,
+            "tooler_tries": 0
         }
 
     
@@ -214,6 +226,12 @@ def planner_agent(state: AgentState) -> AgentState:
       current_executor = "chatter_agent"
       current_subtask = "Greet the user and ask them to provide a valid request"
       tasks = [{"task": current_subtask, "executor": current_executor}]
+
+      state["external_messages"].append({
+        "agent": "Planner Agent", 
+        "message": tasks,
+        "type": "info"              
+      })
 
       return {
           "current_executor": current_executor,
@@ -267,6 +285,12 @@ def planner_agent(state: AgentState) -> AgentState:
         current_executor = "chatter_agent"
         current_subtask = "Tell the user that you couldn't understand their request and ask them to rephrase it"
         tasks = [{"task": current_subtask, "executor": current_executor}]
+
+    state["external_messages"].append({
+        "agent": "Planner Agent", 
+        "message": tasks,
+        "type": "info"              
+    })
 
     return {
         "current_executor": current_executor,

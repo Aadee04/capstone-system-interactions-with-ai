@@ -1,68 +1,218 @@
-from fastapi import FastAPI
+# main.py
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.agent import app as agent_app, create_initial_state
 from app.modules.embeddings.embeddings_generator import generate_tool_embeddings
-from langchain_core.messages import HumanMessage
-import threading
-import uvicorn
-import time
+from langchain_core.messages import HumanMessage, AIMessage
+import threading, uvicorn, time, json
+from pydantic import BaseModel 
+import json
+from uuid import uuid4
+from copy import deepcopy
 
-# -------------------- FastAPI Setup -------------------- #
+# Simple in-memory snapshot store for paused agent states
+SNAPSHOT_STORE: dict[str, dict] = {}
+SNAPSHOT_TTL = 300  # seconds
 
-api = FastAPI(title="LoLLM Backend")
+# Type hints for request bodies
+class QueryRequest(BaseModel):
+    input: str
 
-api.add_middleware(
+class ContinueRequest(BaseModel):
+    decision: str
+    context: str | None = None
+    thread_id: str
+
+app = FastAPI(title="LoLLM Assistant Backend")
+
+app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["http://localhost:3000"] if you want restricted
+    allow_origins=["*"],  # tighten for prod
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -------------------- Routes -------------------- #
 
-@api.get("/")
+@app.get("/")
 def root():
-    return {"message": "Backend running successfully!"}
+    return {"message": "Backend running successfully!"
+    }
 
-@api.post("/query")
-async def query_agent(request: dict):
-    """Receive text input from frontend (after STT), pass to agent, return response."""
-    user_input = request.get("input", "")
+
+@app.post("/query")
+async def query_agent(request: QueryRequest):
+    """Handle main agent interaction from frontend"""
+    user_input = request.input.strip()
     print(f"[Backend] Received query: {user_input}")
 
-    # Create initial state for agent
+    # Create unique thread_id for this conversation
+    thread_id = str(uuid4())
+    print(f"[Backend] Created thread_id: {thread_id}")
+
+    # Create initial agent state
     state = create_initial_state()
     state["messages"] = [HumanMessage(content=user_input)]
+    state["user_query"] = user_input
 
-    # Run agent
-    result = agent_app.invoke(state)
-    output = result["messages"][-1].content if result.get("messages") else "No response."
+    # Config with thread_id enables checkpointing
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
 
-    print(f"[Backend] Agent response: {output}")
-    return {"response": output}
+    async def event_stream():
+        try:
+            async for step in agent_app.astream(state, config):
+                print("[Backend stream step]:", step.keys())
+
+                # --- Collect external messages ---
+                external_msgs = []
+                if "external_messages" in step:
+                    external_msgs.extend(step["external_messages"])
+                else:
+                    for node_name, node_state in step.items():
+                        if isinstance(node_state, dict) and "external_messages" in node_state:
+                            external_msgs.extend(node_state["external_messages"])
+
+                for msg in external_msgs:
+                    print("[Backend sending external message]:", msg)
+                    yield f"data: {json.dumps(msg)}\n\n"
+
+                # --- Detect awaiting_user_verification anywhere in the graph ---
+                awaiting_flag = False
+                for node_name, node_state in step.items():
+                    if isinstance(node_state, dict) and node_state.get("awaiting_user_verification"):
+                        awaiting_flag = True
+                        break
+
+                if awaiting_flag:
+                    print(f"[Backend] Paused for user verification, thread_id={thread_id}")
+                    # Send thread_id to frontend (lightweight, persisted in checkpointer)
+                    yield f"data: {json.dumps({'status': 'awaiting_user', 'thread_id': thread_id})}\n\n"
+                    break
+
+        except Exception as e:
+            print("[Backend stream error]:", e)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+ 
+@app.post("/continue")
+async def continue_agent(request: ContinueRequest):
+    """Continue the agent after a user_verifier pause."""
+    decision = request.decision.strip().lower()
+    context = getattr(request, "context", "") or ""
+    thread_id = request.thread_id
+
+    if not thread_id:
+        return JSONResponse({"error": "Missing thread_id"}, status_code=400)
+
+    if decision not in {"yes", "no", "abort"}:
+        print(f"[Continue] Invalid decision '{decision}', defaulting to 'abort'")
+        decision = "abort"
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    print(f"[Continue] Resuming thread_id={thread_id} with decision='{decision}'")
+
+    try:
+        # Get current state from checkpoint
+        current_state = agent_app.get_state(config)
+        
+        if not current_state or not current_state.values:
+            return JSONResponse({"error": "Thread not found or expired"}, status_code=404)
+
+        print(f"[Continue] Retrieved checkpoint at node: {current_state.next}")
+        
+        # Update state with user decision
+        updated_values = current_state.values.copy()
+        updated_values["awaiting_user_verification"] = False
+        updated_values["user_verifier_decision"] = decision
+        updated_values["user_context"] = context
+        
+        # Clear external_messages to avoid duplication
+        if "external_messages" in updated_values:
+            updated_values["external_messages"] = []
+        
+        # Add decision messages to conversation
+        if "messages" not in updated_values:
+            updated_values["messages"] = []
+        
+        updated_values["messages"].extend([
+            AIMessage(content="User verification completed."),
+            HumanMessage(content=f"User decision: {decision}, context: {context}")
+        ])
+
+        # Update checkpoint with new state
+        agent_app.update_state(config, updated_values)
+        print(f"[Continue] Updated checkpoint with decision")
+
+    except Exception as e:
+        print(f"[Continue] Error retrieving/updating state: {e}")
+        return JSONResponse({"error": f"Failed to resume: {str(e)}"}, status_code=500)
+
+    async def event_stream():
+        try:
+            # Resume from checkpoint (pass None as state to continue from checkpoint)
+            async for step in agent_app.astream(None, config):
+                print("[Continue stream step]:", step.keys())
+
+                # Aggregate external messages (global + nested)
+                external_msgs = []
+                if "external_messages" in step:
+                    external_msgs.extend(step["external_messages"])
+                else:
+                    for node_name, node_state in step.items():
+                        if isinstance(node_state, dict) and "external_messages" in node_state:
+                            external_msgs.extend(node_state["external_messages"])
+
+                # Send external messages to frontend
+                for msg in external_msgs:
+                    print("[Continue sending external message]:", msg)
+                    yield f"data: {json.dumps(msg)}\n\n"
+
+                # Check if it pauses again for verification
+                awaiting_flag = False
+                for node_name, node_state in step.items():
+                    if isinstance(node_state, dict) and node_state.get("awaiting_user_verification"):
+                        awaiting_flag = True
+                        break
+
+                if awaiting_flag:
+                    print(f"[Continue] Paused again for verification, thread_id={thread_id}")
+                    yield f"data: {json.dumps({'status': 'awaiting_user', 'thread_id': thread_id})}\n\n"
+                    break
+
+        except Exception as e:
+            print("[Continue stream error]:", e)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-# -------------------- Startup Embeddings -------------------- #
 
-@api.get("/startup")
+@app.get("/startup")
 def run_embeddings():
     try:
         print("[Startup] Generating embeddings...")
         generate_tool_embeddings()
         print("[Startup] Embeddings generated successfully.")
-        return "[Startup] Embeddings generated successfully."
+        return {"status": "success"}
     except Exception as e:
         print(f"[Startup] Failed to generate embeddings: {e}")
-        return f"[Startup] Failed to generate embeddings: {e}"
+        return {"status": "error", "message": str(e)}
 
-# -------------------- Main -------------------- #
 
 if __name__ == "__main__":
-    # Run embeddings generation in background on startup
     threading.Thread(target=run_embeddings, daemon=True).start()
-
-    # Wait a moment before starting backend
     time.sleep(2)
     print("[System] Starting FastAPI backend...")
-    uvicorn.run(api, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

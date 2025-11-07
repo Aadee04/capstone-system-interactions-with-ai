@@ -202,8 +202,8 @@ def verifier_agent(state: AgentState) -> AgentState:
 
     if not raw_text:
         print("[Verifier] Empty model response, defaulting to 'user_verifier'")
-        decision_text = "user_verifier"
-        reason = ""
+        decision = "user_verifier"
+        reason = "Verifier model returned empty response."
     else:
         # Split only once on '-' to separate reason
         parts = raw_text.split("-", 1)
@@ -224,11 +224,19 @@ def verifier_agent(state: AgentState) -> AgentState:
             print(f"[Verifier] Coder tried {coder_tries} times, marking as failure")
             decision = "failure"
     
+    
+    state["external_messages"].append({
+        "agent": "Verifier Agent", 
+        "message": {"decision": decision, "reason": reason},
+        "type": "info"              
+    })
+    
     # Update retry counters
     return {
         "verifier_decision": decision ,
         "subtask_index": subtask_index + 1 if decision == "success" else subtask_index,
-        "verifier_reason": reason if decision != "escalate" else ""
+        "verifier_reason": reason if decision != "escalate" else "",
+        "external_messages": state["external_messages"]
     }
     
 

@@ -26,7 +26,7 @@ Examples:
 "Calculate 5+3" → I'm here to help with information and questions, but I can't perform calculations. What else can I do for you?
 """
 
-chat_model = ChatOllama(model="freakycoder123/phi4-fc")
+chat_model = ChatOllama(model="freakycoder123/phi4-fc", num_predict=350)
 def chat_agent(state: AgentState) -> AgentState:
     print("[Chat Agent Invoked] Subtask:", state.get('current_subtask', 'No subtask'))  # DEBUGGING ---------------
     
@@ -43,5 +43,15 @@ def chat_agent(state: AgentState) -> AgentState:
     response = chat_model.invoke([system_as_human, task_message] + state["messages"])
     
     clean_resp = response.content.strip().split("\n\n")[0] 
+
     
-    return {"messages": [AIMessage(content=clean_resp)]}
+    state["external_messages"].append({
+        "agent": "Chatter Agent", 
+        "message": clean_resp,
+        "type": "info"              
+    })
+    
+    return {
+        "messages": [AIMessage(content=clean_resp)],
+        "external_messages": state["external_messages"]
+    }

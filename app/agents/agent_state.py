@@ -3,7 +3,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from app.agents.discover_app import discover_tools, discover_tools_descriptions
 from typing import List, Dict, Any
-from langgraph.graph import GraphState
+from langgraph.graph import StateGraph
 from langchain_core.messages import BaseMessage
 
 

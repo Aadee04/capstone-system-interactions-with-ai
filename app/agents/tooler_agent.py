@@ -77,7 +77,7 @@ def parse_tool_response_fallback(content: str):
 
 
 # =================== MODEL ===================
-tooler_model = ChatOllama(model="freakycoder123/phi4-fc")
+tooler_model = ChatOllama(model="freakycoder123/phi4-fc", num_predict=100)
 
 
 # =================== MAIN AGENT ===================
@@ -137,9 +137,16 @@ def tooler_agent(state: AgentState) -> AgentState:
     )
 
     # print(f"[Tool Agent] Final tool calls: {normalized}")
+    
+    state["external_messages"].append({
+        "agent": "Tooler Agent", 
+        "message": normalized,
+        "type": "info"              
+    })
 
     return {
         "messages": ai_message,
         "tool_calls": state.get("tool_calls", []) + normalized,
-        "tooler_tries": state.get("tooler_tries", 0) + 1
+        "tooler_tries": state.get("tooler_tries", 0) + 1,
+        "external_messages": state["external_messages"]
     }

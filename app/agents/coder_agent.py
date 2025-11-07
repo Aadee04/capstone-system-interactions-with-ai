@@ -131,8 +131,15 @@ def coder_agent(state: AgentState) -> AgentState:
         except Exception as e:
             print(f"[Coder Agent] Error with tool calls: {e}")
     
+    state["external_messages"].append({
+        "agent": "Coder Agent", 
+        "message": tool_calls,
+        "type": "info"              
+    })
+    
     return {
         "messages": [response],  # Only return new message
         "tool_calls": state.get("tool_calls", []) + (response.tool_calls or []),
-        "coder_tries": state.get("coder_tries", 0) + 1
+        "coder_tries": state.get("coder_tries", 0) + 1,
+        "external_messages": state["external_messages"]
     }

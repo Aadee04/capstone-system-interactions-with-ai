@@ -1,8 +1,9 @@
-
+# agent.py
 from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import MemorySaver
 from app.agents.agent_state import tools_list, create_initial_state
 
 
@@ -21,6 +22,15 @@ tool_node = ToolNode(tools=tools_list)
 
 # ------------------------------ Helper Functions for the graph ------------------------------
 
+def serialize_messages(messages):
+    serialized = []
+    for m in messages:
+        if hasattr(m, "content"):
+            serialized.append(str(m.content))
+        else:
+            serialized.append(str(m))
+    return serialized
+
 # Helper function to execute tool and track completed tools
 def execute_tool_with_tracking(state: AgentState) -> AgentState:
     print("[Execute Tool Invoked]")
@@ -28,26 +38,34 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
     # Invoke the tool node (handles tool execution + adding ToolMessages)
     result = tool_node.invoke(state)
     
-    # print(f"[Execute Tool] Tool execution complete")
     print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
     
-    # Track completed tools (from the last AI message’s tool_calls)
+    # Ensure external_messages always exists
+    if "external_messages" not in result:
+        result["external_messages"] = []
+    
     messages = result.get("messages", [])
+    serialized_messages = serialize_messages(messages)
 
-    # Print message contents for debugging
-    # for i, m in enumerate(messages):
-    #     print(f"\n[Message {i}] Type: {type(m).__name__}")
-    #     if hasattr(m, "content"):
-    #         print(f"  Content: {m.content}")
-    #     if hasattr(m, "tool_calls"):
-    #         print(f"  Tool Calls: {m.tool_calls}")
-            
+    # Safely append a tracking message
+    result["external_messages"].append({
+        "agent": "Execute Tool",
+        "message": serialized_messages,
+        "type": "info"
+    })
+
+    # Debug: print tool calls if present
     ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
     if ai_msg:
         tool_calls = getattr(ai_msg, "tool_calls", []) or []
         print(f"[Execute Tool] Just executed: {[tc.get('name') for tc in tool_calls]}")
-    
-    return result
+
+    # Always carry state forward to preserve external_messages
+    return {
+        **state,
+        **result
+    }
+
 
 
 # ---------------------------------- Build the Agent App / Graph ------------------------------
@@ -103,18 +121,31 @@ graph.add_conditional_edges(
     }
 )
 
+def user_verifier_routing(state: AgentState) -> str:
+    """Route after user_verifier - if awaiting decision, interrupt to END"""
+    if state.get("awaiting_user_verification"):
+        return "interrupt"
+    
+    decision = state.get("user_verifier_decision", "abort")
+    return decision
+
 graph.add_conditional_edges(
     "user_verifier",
-    lambda state: state.get("user_verifier_decision", "abort"),
+    user_verifier_routing,
     {
-        "yes": "planner_agent",         # manual override - continue to next step
-        "no": "verifier_agent",         # manual override - needs further working
-        "abort": END                    # manual override - abort
+        "yes": "verifier_agent",         # manual override - continue to next step
+        "no": "verifier_agent",          # manual override - needs further working
+        "abort": END,                    # manual override - abort
+        "interrupt": END                 # NEW: pause for user input
     }
 )
 
+# CRITICAL: Compile with checkpointer ONLY ONCE
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
 
-app = graph.compile()
+# Verify checkpointer is set
+print(f"[Agent] Checkpointer configured: {app.checkpointer is not None}")
 
 # # Optional visualization:
 # try:
@@ -174,10 +205,9 @@ def agent_main():
         inputs = create_initial_state()
         inputs["messages"] = [HumanMessage(content=user_input)]
         
-        # Stream and print the agent’s response
+        # Stream and print the agent's response
         print_stream(app.stream(inputs, stream_mode="values", config={"recursion_limit": 200}))
 
 
 if __name__ == "__main__":
     agent_main()
-
