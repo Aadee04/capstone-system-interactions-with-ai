@@ -236,7 +236,8 @@ def verifier_agent(state: AgentState) -> AgentState:
         "verifier_decision": decision ,
         "subtask_index": subtask_index + 1 if decision == "success" else subtask_index,
         "verifier_reason": reason if decision != "escalate" else "",
-        "external_messages": state["external_messages"]
+        "external_messages": state["external_messages"],
+        "awaiting_user_verification": True if decision == "user_verifier" else False
     }
     
 

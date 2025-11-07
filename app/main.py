@@ -60,7 +60,8 @@ async def query_agent(request: QueryRequest):
     # Config with thread_id enables checkpointing
     config = {
         "configurable": {
-            "thread_id": thread_id
+            "thread_id": thread_id,
+            "recursion_limit": 200
         }
     }
 
@@ -68,6 +69,20 @@ async def query_agent(request: QueryRequest):
         try:
             async for step in agent_app.astream(state, config):
                 print("[Backend stream step]:", step.keys())
+            
+                # Handle interrupts first
+                if "__interrupt__" in step:
+                    interrupt_obj = step["__interrupt__"]  # this is Interrupt, don't send directly
+
+                    # Build a JSON-serializable dict
+                    interrupt_payload = {
+                        "type": "user_verifier",
+                        "thread_id": thread_id
+                    }
+
+                    print("[Backend sending interrupt]:", interrupt_payload)
+                    yield f"data: {json.dumps(interrupt_payload)}\n\n"
+                    break
 
                 # --- Collect external messages ---
                 external_msgs = []
@@ -108,13 +123,15 @@ async def continue_agent(request: ContinueRequest):
     decision = request.decision.strip().lower()
     context = getattr(request, "context", "") or ""
     thread_id = request.thread_id
+    print(f"[Continue] Received decision: {decision}, context: {context}, thread_id: {thread_id}")
 
     if not thread_id:
         return JSONResponse({"error": "Missing thread_id"}, status_code=400)
 
     config = {
         "configurable": {
-            "thread_id": thread_id
+            "thread_id": thread_id,
+            "recursion_limit": 200
         }
     }
 
@@ -122,10 +139,13 @@ async def continue_agent(request: ContinueRequest):
         # Create resume command with user's decision
         resume_command = Command(
             resume={
-                "decision": decision,
-                "context": context
+                "user_verifier_decision": decision,
+                "user_context": context,
+                "awaiting_user_verification": False
             }
         )
+
+        print(f"[Continue] Created resume command: {resume_command}")
 
         async def event_stream():
             try:
@@ -171,6 +191,7 @@ async def continue_agent(request: ContinueRequest):
     except Exception as e:
         print(f"[Continue] Error retrieving/updating state: {e}")
         return JSONResponse({"error": f"Failed to resume: {str(e)}"}, status_code=500)
+
 
 @app.get("/startup")
 def run_embeddings():

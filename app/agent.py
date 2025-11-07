@@ -115,7 +115,7 @@ graph.add_conditional_edges(
         "chatter_agent": "chatter_agent",   # retry chatter / re-route
         "tooler_agent": "tooler_agent",     # retry with tooler / re-route
         "coder_agent": "coder_agent",       # retry with coder / re-route / escalate
-        "user_verifier": "user_verifier",   # ask user for help
+        "user_verifier": END,   # User cannot help
         "planner": "planner_agent",         # success, next subtask
         "exit": END                         # abort
     }

@@ -188,7 +188,8 @@ def planner_agent(state: AgentState) -> AgentState:
                 "current_subtask": "done",
                 "subtask_index": subtask_index,
                 'coder_tries': 0,
-                "tooler_tries": 0
+                "tooler_tries": 0,
+            "user_verifier_decision": ""
             }
 
         current_task = tasks[subtask_index]
@@ -213,7 +214,8 @@ def planner_agent(state: AgentState) -> AgentState:
             "current_subtask": current_subtask,
             "subtask_index": subtask_index,
             'coder_tries': 0,
-            "tooler_tries": 0
+            "tooler_tries": 0,
+            "user_verifier_decision": ""
         }
 
     
@@ -238,7 +240,8 @@ def planner_agent(state: AgentState) -> AgentState:
           "current_subtask": current_subtask,
           "tasks": tasks,
           'coder_tries': 0,
-          "tooler_tries": 0
+          "tooler_tries": 0,
+            "user_verifier_decision": ""
       }
     
     full_prompt = planner_system_prompt + "\nUser Request: " + user_message
@@ -297,7 +300,8 @@ def planner_agent(state: AgentState) -> AgentState:
         "current_subtask": current_subtask,
         "tasks": tasks,
         'coder_tries': 0,
-        "tooler_tries": 0
+        "tooler_tries": 0,
+            "user_verifier_decision": ""
     }
 
 

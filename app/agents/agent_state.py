@@ -15,8 +15,6 @@ class AgentState(TypedDict, total=False):
     external_messages: List[Dict[str, Any]] = []
 
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    user_query: str
-    resolved_query: str 
 
     tasks: list[str]
     subtask_index: int
@@ -30,6 +28,7 @@ class AgentState(TypedDict, total=False):
     verifier_reason: str
 
     awaiting_user_verification: bool
+    user_verifier_decision: str
     user_context: str # From User Verifier
 
     tool_calls: list[dict]
@@ -41,8 +40,6 @@ def create_initial_state() -> AgentState:
         "external_messages": [],
 
         "messages": [],
-        "user_query": "",
-        "resolved_query": "",
 
         "tasks": [],
         "subtask_index": 0,
@@ -57,6 +54,7 @@ def create_initial_state() -> AgentState:
         
         "awaiting_user_verification": False,
         "user_context": "",
+        "user_verifier_decision": "",
 
         "tool_calls": []
     }
