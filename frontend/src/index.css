@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Glass-shimmer design system */
+    --background: 240 20% 8%;
+    --foreground: 210 100% 98%;
+
+    --glass: 240 15% 15%;
+    --glass-border: 210 50% 40%;
+    --glass-shimmer: 210 90% 60%;
+    
+    --card: 240 15% 12%;
+    --card-foreground: 210 100% 98%;
+
+    --popover: 240 20% 10%;
+    --popover-foreground: 210 100% 98%;
+
+    --primary: 210 100% 55%;
+    --primary-foreground: 210 100% 98%;
+    --primary-glow: 210 100% 65%;
+
+    --secondary: 270 80% 60%;
+    --secondary-foreground: 210 100% 98%;
+
+    --muted: 240 15% 20%;
+    --muted-foreground: 210 20% 70%;
+
+    --accent: 280 90% 65%;
+    --accent-foreground: 210 100% 98%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 210 100% 98%;
+
+    --border: 210 30% 25%;
+    --input: 240 15% 18%;
+    --ring: 210 100% 55%;
+
+    --radius: 1rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 55%), hsl(280 90% 65%));
+    --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    
+    /* Shadows and glows */
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --glow-primary: 0 0 30px hsl(210 100% 55% / 0.5);
+    --glow-accent: 0 0 30px hsl(280 90% 65% / 0.5);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: radial-gradient(ellipse at top, hsl(240 20% 12%), hsl(240 20% 8%));
+    min-height: 100vh;
+  }
+
+  /* Glass effect utilities */
+  .glass {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.05)
+    );
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: var(--shadow-glass);
+  }
+
+
+  .glow-pulse {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% {
+      filter: drop-shadow(var(--glow-primary));
+    }
+    50% {
+      filter: drop-shadow(var(--glow-accent));
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
