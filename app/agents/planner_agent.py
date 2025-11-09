@@ -166,7 +166,7 @@ def safe_json_parse(content: str):
         return {}
 
 
-planner_model = ChatOllama(model="freakycoder123/phi4-fc")
+planner_model = ChatOllama(model="freakycoder123/phi4-fc", num_predict=350)
 def planner_agent(state: AgentState) -> AgentState:
     print("[Enhanced Planner Agent Invoked]")  # DEBUGGING ---------------
 
@@ -177,12 +177,19 @@ def planner_agent(state: AgentState) -> AgentState:
 
         # Check if all tasks completed (index >= length)
         if subtask_index >= len(tasks):
+            
+            state["external_messages"].append({
+                "agent": "Planner Agent", 
+                "message": "All subtasks completed.",
+                "type": "info"              
+            })
             return {
                 "current_executor": "exit",
                 "current_subtask": "done",
                 "subtask_index": subtask_index,
                 'coder_tries': 0,
-                "tooler_tries": 0
+                "tooler_tries": 0,
+            "user_verifier_decision": ""
             }
 
         current_task = tasks[subtask_index]
@@ -196,12 +203,19 @@ def planner_agent(state: AgentState) -> AgentState:
             current_subtask = str(current_task)
             current_executor = "tooler_agent"
 
+        state["external_messages"].append({
+            "agent": "Planner Agent", 
+            "message": f"Subtask {subtask_index}: {current_subtask} assigned to {current_executor}",
+            "type": "info"              
+        })
+
         return {
             "current_executor": current_executor,
             "current_subtask": current_subtask,
             "subtask_index": subtask_index,
-                'coder_tries': 0,
-                "tooler_tries": 0
+            'coder_tries': 0,
+            "tooler_tries": 0,
+            "user_verifier_decision": ""
         }
 
     
@@ -215,12 +229,19 @@ def planner_agent(state: AgentState) -> AgentState:
       current_subtask = "Greet the user and ask them to provide a valid request"
       tasks = [{"task": current_subtask, "executor": current_executor}]
 
+      state["external_messages"].append({
+        "agent": "Planner Agent", 
+        "message": tasks,
+        "type": "info"              
+      })
+
       return {
           "current_executor": current_executor,
           "current_subtask": current_subtask,
           "tasks": tasks,
           'coder_tries': 0,
-          "tooler_tries": 0
+          "tooler_tries": 0,
+            "user_verifier_decision": ""
       }
     
     full_prompt = planner_system_prompt + "\nUser Request: " + user_message
@@ -228,7 +249,7 @@ def planner_agent(state: AgentState) -> AgentState:
 
     # Generate LLM Response
     response = planner_model.invoke([final_system_prompt])
-    print(f"[Planner] Raw response: {response.content}")  # DEBUGGING ---------------
+    # print(f"[Planner] Raw response: {response.content}")  # DEBUGGING ---------------
 
     # Parse Response if in json format
     try:
@@ -236,7 +257,7 @@ def planner_agent(state: AgentState) -> AgentState:
     except Exception:
         parsed = None  # Will be handled by fallback below
     
-    print(f"[Planner parsed]: {parsed}")  # DEBUGGING ---------------
+    print(f"[Planner Tasks]: {parsed}")  # DEBUGGING ---------------
     
     # Handle successful parsing (should be array format)
     if isinstance(parsed, list) and parsed:
@@ -268,12 +289,19 @@ def planner_agent(state: AgentState) -> AgentState:
         current_subtask = "Tell the user that you couldn't understand their request and ask them to rephrase it"
         tasks = [{"task": current_subtask, "executor": current_executor}]
 
+    state["external_messages"].append({
+        "agent": "Planner Agent", 
+        "message": tasks,
+        "type": "info"              
+    })
+
     return {
         "current_executor": current_executor,
         "current_subtask": current_subtask,
         "tasks": tasks,
         'coder_tries': 0,
-        "tooler_tries": 0
+        "tooler_tries": 0,
+            "user_verifier_decision": ""
     }
 
 

@@ -2,6 +2,9 @@ from typing import Annotated, Sequence, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from app.agents.discover_app import discover_tools, discover_tools_descriptions
+from typing import List, Dict, Any
+from langgraph.graph import StateGraph
+from langchain_core.messages import BaseMessage
 
 
 tools_list = discover_tools()
@@ -9,9 +12,9 @@ tools_list = discover_tools()
 tool_list_with_desc_str = discover_tools_descriptions()
 
 class AgentState(TypedDict, total=False):
+    external_messages: List[Dict[str, Any]] = []
+
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    user_query: str
-    resolved_query: str 
 
     tasks: list[str]
     subtask_index: int
@@ -24,6 +27,8 @@ class AgentState(TypedDict, total=False):
     verifier_decision: str
     verifier_reason: str
 
+    awaiting_user_verification: bool
+    user_verifier_decision: str
     user_context: str # From User Verifier
 
     tool_calls: list[dict]
@@ -32,9 +37,9 @@ class AgentState(TypedDict, total=False):
 
 def create_initial_state() -> AgentState:
     return {
+        "external_messages": [],
+
         "messages": [],
-        "user_query": "",
-        "resolved_query": "",
 
         "tasks": [],
         "subtask_index": 0,
@@ -47,6 +52,9 @@ def create_initial_state() -> AgentState:
         "verifier_decision": "",
         "verifier_reason": "",
         
+        "awaiting_user_verification": False,
         "user_context": "",
+        "user_verifier_decision": "",
+
         "tool_calls": []
     }

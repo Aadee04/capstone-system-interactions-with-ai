@@ -1,8 +1,9 @@
-
+# agent.py
 from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import MemorySaver
 from app.agents.agent_state import tools_list, create_initial_state
 
 
@@ -21,6 +22,15 @@ tool_node = ToolNode(tools=tools_list)
 
 # ------------------------------ Helper Functions for the graph ------------------------------
 
+def serialize_messages(messages):
+    serialized = []
+    for m in messages:
+        if hasattr(m, "content"):
+            serialized.append(str(m.content))
+        else:
+            serialized.append(str(m))
+    return serialized
+
 # Helper function to execute tool and track completed tools
 def execute_tool_with_tracking(state: AgentState) -> AgentState:
     print("[Execute Tool Invoked]")
@@ -28,35 +38,34 @@ def execute_tool_with_tracking(state: AgentState) -> AgentState:
     # Invoke the tool node (handles tool execution + adding ToolMessages)
     result = tool_node.invoke(state)
     
-    print(f"[Execute Tool] Tool execution complete")
     print(f"[Execute Tool] Messages after execution: {len(result.get('messages', []))} messages")
     
-    # Track completed tools (from the last AI message’s tool_calls)
+    # Ensure external_messages always exists
+    if "external_messages" not in result:
+        result["external_messages"] = []
+    
     messages = result.get("messages", [])
-    print(f"[Execute Tool] Messages after execution: {len(messages)}")
+    serialized_messages = serialize_messages(messages)
 
-    # Print message contents for debugging
-    for i, m in enumerate(messages):
-        print(f"\n[Message {i}] Type: {type(m).__name__}")
-        if hasattr(m, "content"):
-            print(f"  Content: {m.content}")
-        if hasattr(m, "tool_calls"):
-            print(f"  Tool Calls: {m.tool_calls}")
-            
+    # Safely append a tracking message
+    result["external_messages"] = [{
+    "agent": "Execute Tool",
+    "message": serialized_messages,
+    "type": "info"
+}]
+
+    # Debug: print tool calls if present
     ai_msg = next((m for m in reversed(messages) if hasattr(m, "tool_calls")), None)
     if ai_msg:
         tool_calls = getattr(ai_msg, "tool_calls", []) or []
-        
-        completed = state.get("completed_tools", []).copy()
-        for tc in tool_calls:
-            tool_name = tc.get("name")
-            if tool_name and tool_name not in completed:
-                completed.append(tool_name)
-        
-        result["completed_tools"] = completed
-        print(f"[Execute Tool] Completed tools: {completed}")
-    
-    return result
+        print(f"[Execute Tool] Just executed: {[tc.get('name') for tc in tool_calls]}")
+
+    # Always carry state forward to preserve external_messages
+    return {
+        **state,
+        **result
+    }
+
 
 
 # ---------------------------------- Build the Agent App / Graph ------------------------------
@@ -106,24 +115,38 @@ graph.add_conditional_edges(
         "chatter_agent": "chatter_agent",   # retry chatter / re-route
         "tooler_agent": "tooler_agent",     # retry with tooler / re-route
         "coder_agent": "coder_agent",       # retry with coder / re-route / escalate
-        "user_verifier": "user_verifier",   # ask user for help
+        "user_verifier": "coder_agent",   # User cannot help
         "planner": "planner_agent",         # success, next subtask
         "exit": END                         # abort
     }
 )
 
+def user_verifier_routing(state: AgentState) -> str:
+    """Route after user_verifier based on resumed input"""
+    # Get decision from resumed command
+    if isinstance(state.get("__command__"), dict):
+        decision = state["__command__"].get("decision", "abort")
+    else:
+        decision = "abort"
+    
+    return decision
+
 graph.add_conditional_edges(
     "user_verifier",
-    lambda state: state.get("user_verifier_decision", "abort"),
+    user_verifier_routing,
     {
-        "yes": "planner_agent",         # manual override - continue to next step
-        "no": "verifier_agent",         # manual override - needs further working
-        "abort": END                    # manual override - abort
+        "yes": "verifier_agent",      # Continue to next planning step
+        "no": "verifier_agent",      # Back to verification
+        "abort": END
     }
 )
 
+# CRITICAL: Compile with checkpointer ONLY ONCE
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
 
-app = graph.compile()
+# Verify checkpointer is set
+print(f"[Agent] Checkpointer configured: {app.checkpointer is not None}")
 
 # # Optional visualization:
 # try:
@@ -137,26 +160,36 @@ app = graph.compile()
 
 # ------------------------------- Run the Agent --------------------------------------------
 def print_stream(stream):
+    printed_ids = set()  # track messages already printed
+    
     for s in stream:
-        message = s["messages"][-1]
+        messages = s.get("messages", [])
+        if not messages:
+            continue
         
-        # If the message is a dict with 'functs' key (LangGraph tool call JSON)
-        if isinstance(message, dict) and "functs" in message:
-            for call in message["functs"]:
-                tool_name = call.get("name")
-                args = call.get("arguments", {})
+        # print only messages that are new
+        for msg in messages:
+            msg_id = getattr(msg, "id", id(msg))  # fallback to object id
+            if msg_id in printed_ids:
+                continue
+            
+            printed_ids.add(msg_id)
 
-                # Find the actual tool function
-                tool_func = next((t for t in tools_list if t.name == tool_name), None)
-                if tool_func:
-                    result = tool_func(**args)
-                    print(f"[Tool: {tool_name}] Output: {result}")
-        else:
-            # Normal message
-            if hasattr(message, "pretty_print"):
-                message.pretty_print()
+            # handle LangGraph tool call dicts
+            if isinstance(msg, dict) and "functs" in msg:
+                for call in msg["functs"]:
+                    tool_name = call.get("name")
+                    args = call.get("arguments", {})
+                    tool_func = next((t for t in tools_list if t.name == tool_name), None)
+                    if tool_func:
+                        result = tool_func(**args)
+                        print(f"[Tool: {tool_name}] Output: {result}")
+            
+            # normal LangChain or BaseMessage
+            elif hasattr(msg, "pretty_print"):
+                msg.pretty_print()
             else:
-                print(message)
+                print(msg)
 
 
 # -------------------------------- Main Loop (CLI) -----------------------------------------
@@ -173,10 +206,9 @@ def agent_main():
         inputs = create_initial_state()
         inputs["messages"] = [HumanMessage(content=user_input)]
         
-        # Stream and print the agent’s response
+        # Stream and print the agent's response
         print_stream(app.stream(inputs, stream_mode="values", config={"recursion_limit": 200}))
 
 
 if __name__ == "__main__":
     agent_main()
-

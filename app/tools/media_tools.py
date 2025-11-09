@@ -574,7 +574,7 @@ if __name__ == "__main__":
     screenshot_result = take_screenshot.invoke({})
 
     print("\n2. Testing media control:")
-    control_result = control_media.invoke({"action":"mute"})
+    control_result = control_media_playback.invoke({"action":"mute"})
 
     print("\n3. Testing webcam capture:")
     webcam_result = capture_webcam_photo.invoke({"save_path":"test_webcam.jpg"})
