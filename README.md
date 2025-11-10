@@ -22,9 +22,7 @@ To develop a local agent system that automates actions on the system using exist
 
 ## 🏗️ System Architecture
 
-```markdown
 ![System Architecture](docs/Agent_Architecture.jpg)
-```
 
 ---
 
