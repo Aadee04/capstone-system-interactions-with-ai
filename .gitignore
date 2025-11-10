@@ -4,7 +4,6 @@ __pycache__/
 WARP.md
 launch.json
 .vscode/
-*.jpg
 *.png
 
 # Logs
