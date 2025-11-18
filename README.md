@@ -1,4 +1,4 @@
-# Agentic System Interactions with AI
+# Agentic System Interactions with Local LLMs
 
 A local multi-agent system designed to automate tasks securely on a user’s machine without exposing private data.  
 This project integrates a Vite-React frontend with a FastAPI backend that orchestrates LangGraph-based intelligent agents capable of planning, executing, and verifying tasks in real time.
